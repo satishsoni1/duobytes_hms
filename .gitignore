@@ -3,3 +3,6 @@ backup/
 application/logs/
 application/cache/
 temp/
+
+# Local test-copy config (contains a bridge API key)
+application/config/development/

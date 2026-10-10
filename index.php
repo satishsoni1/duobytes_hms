@@ -56,7 +56,8 @@
  
     ini_set('max_execution_time', 3000); // 0 = Unlimited
 	
-	define('ENVIRONMENT', 'production');
+	// 'production' unless CI_ENV is set (e.g. CI_ENV=development for a local test copy).
+	define('ENVIRONMENT', getenv('CI_ENV') ?: (isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'production'));
 
 /*
  *---------------------------------------------------------------

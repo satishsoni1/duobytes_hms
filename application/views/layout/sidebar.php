@@ -43,6 +43,12 @@
                 }
                 } ?>			
 			
+            <?php if ($this->rbac->hasPrivilege('abdm_settings', 'can_view') || $this->rbac->hasPrivilege('abdm_abha', 'can_view') || $this->rbac->hasPrivilege('abdm_consent', 'can_view')) { ?>
+                <li class="nav-item <?php echo set_Topmenu('abdm'); ?>">
+                    <a class="nav-link" href="<?php echo site_url($this->rbac->hasPrivilege('abdm_settings', 'can_view') ? 'admin/abdm' : ($this->rbac->hasPrivilege('abdm_abha', 'can_view') ? 'admin/abdm/share' : 'admin/abdm/consent')); ?>">
+                        <i class="fa fa-id-card"></i><span> ABDM / ABHA</span></a>
+                </li>
+            <?php } ?>
             <?php
                 if($this->module_lib->hasActive('bill')){
                     if(($this->rbac->hasPrivilege('opd_billing','can_view')) ||

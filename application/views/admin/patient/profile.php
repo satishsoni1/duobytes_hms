@@ -61,6 +61,7 @@ $genderList = $this->customlib->getGender();
                           <h1>
                             <?php echo composePatientName($result['patient_name'], $result['id']); ?>
                             <span class="badge ms-1 sh-badge-opd">OPD</span>
+                            <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_view') || $this->rbac->hasPrivilege('abdm_records', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/abdm/patient/' . (int) $result['id']); ?>"><i class="fa fa-id-card"></i> ABHA / ABDM</a><?php endif; ?>
                             <?php if ($result['is_antenatal'] == 1): ?><span class="badge ms-1 sh-badge-antenatal">Antenatal</span><?php endif; ?>
                           </h1>
                           <div class="sub">
