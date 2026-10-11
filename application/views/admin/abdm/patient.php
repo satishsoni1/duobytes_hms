@@ -43,6 +43,9 @@ $has_abha = !empty($patient['abha_address']) || !empty($patient['abha_number']);
                     </ul>
                     <div class="tab-content">
                         <div class="tab-pane fade show active" id="abha-verify">
+                            <label class="form-label small mb-1" for="v-qr">Scan ABHA card QR <span class="text-muted">(QR scanner, or paste the QR text)</span></label>
+                            <input id="v-qr" class="form-control form-control-sm mb-1" placeholder="Click here and scan the patient's ABHA card QR" autocomplete="off">
+                            <div id="v-qr-info" class="small mb-2"></div>
                             <label class="form-label">Method</label>
                             <select id="v-method" class="form-select form-select-sm mb-2">
                                 <option value="abha-number:aadhaar">ABHA number · Aadhaar OTP</option>
@@ -107,6 +110,9 @@ $has_abha = !empty($patient['abha_address']) || !empty($patient['abha_number']);
                     <div>
                         <button class="btn btn-outline-secondary btn-sm" id="abdm-sync"><i class="fa fa-refresh"></i> Sync records</button>
                         <button class="btn btn-primary btn-sm" id="abdm-link" <?php echo $has_abha ? '' : 'disabled title="Attach ABHA first"'; ?>><i class="fa fa-link"></i> Link to ABHA</button>
+                        <?php if (!$has_abha && $patient['mobileno']) { ?>
+                            <button class="btn btn-outline-primary btn-sm" id="abdm-sms" title="ABDM sends the patient an SMS explaining how to link these records from their ABHA app"><i class="fa fa-commenting"></i> Send ABDM SMS link</button>
+                        <?php } ?>
                     </div>
                 <?php } ?>
             </div>

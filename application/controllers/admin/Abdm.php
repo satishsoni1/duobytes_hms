@@ -180,7 +180,8 @@ class Abdm extends Admin_Controller
         $this->guard('abdm_abha', 'can_add');
         $b = $this->body();
         $this->call(function () use ($patient_id, $b) {
-            if (!$this->abdm_model->get_patient($patient_id)) {
+            $patient = $this->abdm_model->get_patient($patient_id);
+            if (!$patient) {
                 throw new Exception('Patient not found', 404);
             }
             $prof    = $this->abdm_client->post('/m1/profile', array('token' => isset($b['token']) ? $b['token'] : ''));
@@ -194,6 +195,14 @@ class Abdm extends Admin_Controller
                 throw new Exception('This ABHA is already attached to patient #' . $other['patient_id'], 409);
             }
             $name = isset($prof['name']) ? $prof['name'] : trim((isset($prof['firstName']) ? $prof['firstName'] : '') . ' ' . (isset($prof['lastName']) ? $prof['lastName'] : ''));
+            // ABDM: the HIP must make sure the ABHA belongs to this patient before linking records to it.
+            $mismatch = $this->abdm_model->demographic_mismatches($patient, $prof);
+            if ($mismatch && empty($b['confirmMismatch'])) {
+                return array('mismatch' => $mismatch, 'abhaName' => $name);
+            }
+            if ($mismatch) {
+                log_message('info', 'ABDM: ABHA attached despite mismatch for patient ' . (int) $patient_id . ' by staff ' . $this->staff_id() . ': ' . implode('; ', $mismatch));
+            }
             $this->abdm_model->save_abha($patient_id, $number, $address, $name, $this->staff_id());
             $this->abdm_model->sync_patient($this->abdm_client, $patient_id);
             return array('abhaNumber' => $number, 'abhaAddress' => $address, 'name' => $name);
@@ -227,6 +236,18 @@ class Abdm extends Admin_Controller
             $this->abdm_model->sync_patient($this->abdm_client, $patient_id);
             $this->abdm_model->sync($this->abdm_client, $patient_id, 500);
             return $this->abdm_client->post('/hip/patients/' . rawurlencode($this->abdm_model->mrn($patient_id)) . '/link', array());
+        });
+    }
+
+    public function sms_link($patient_id = '')
+    {
+        if (!ctype_digit((string) $patient_id)) {
+            $this->json(array('error' => 'Invalid patient id'), 400);
+        }
+        $this->guard('abdm_records', 'can_add');
+        $this->call(function () use ($patient_id) {
+            $this->abdm_model->sync_patient($this->abdm_client, $patient_id);
+            return $this->abdm_client->post('/hip/patients/' . rawurlencode($this->abdm_model->mrn($patient_id)) . '/sms', array());
         });
     }
 

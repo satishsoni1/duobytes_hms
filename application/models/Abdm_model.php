@@ -116,6 +116,42 @@ class Abdm_model extends CI_Model
         $this->db->replace('abdm_patients', $row);
     }
 
+    /**
+     * Identity check before attaching an ABHA: compare HMS demographics with the ABHA profile.
+     * Returns a list of human-readable mismatches (empty = matches).
+     */
+    public function demographic_mismatches($patient, $prof)
+    {
+        $norm = function ($n) {
+            $parts = preg_split('/\s+/', strtolower(preg_replace('/[^a-z ]/i', ' ', (string) $n)), -1, PREG_SPLIT_NO_EMPTY);
+            $parts = array_values(array_diff($parts, array('mr', 'mrs', 'ms', 'dr', 'shri', 'smt', 'kumari', 'baby', 'master')));
+            sort($parts);
+            return $parts;
+        };
+        $out = array();
+        $abha_name = isset($prof['name']) ? $prof['name'] : trim((isset($prof['firstName']) ? $prof['firstName'] : '') . ' ' . (isset($prof['middleName']) ? $prof['middleName'] : '') . ' ' . (isset($prof['lastName']) ? $prof['lastName'] : ''));
+        $a = $norm($patient['patient_name']);
+        $b = $norm($abha_name);
+        // Same person if every word of the shorter name appears in the longer one ("Satish Soni" vs "Satish Kumar Soni").
+        $short = count($a) <= count($b) ? $a : $b;
+        $long = count($a) <= count($b) ? $b : $a;
+        if (!$short || array_diff($short, $long)) {
+            $out[] = 'Name: hospital "' . $patient['patient_name'] . '" vs ABHA "' . $abha_name . '"';
+        }
+        $g = strtoupper(substr((string) (isset($prof['gender']) ? $prof['gender'] : ''), 0, 1));
+        $hg = $this->gender($patient['gender']);
+        if ($g && $hg !== 'U' && $g !== $hg) {
+            $out[] = 'Gender: hospital ' . $patient['gender'] . ' vs ABHA ' . $prof['gender'];
+        }
+        $abha_dob = isset($prof['dateOfBirth']) ? $prof['dateOfBirth'] : (isset($prof['dob']) ? $prof['dob'] : '');
+        $abha_yob = isset($prof['yearOfBirth']) ? (int) $prof['yearOfBirth'] : (preg_match('/(\d{4})/', (string) $abha_dob, $m) ? (int) $m[1] : 0);
+        $hp = $this->patient_payload($patient);
+        if ($abha_yob && $hp['yearOfBirth'] && abs($abha_yob - (int) $hp['yearOfBirth']) > 1) {
+            $out[] = 'Year of birth: hospital ' . $hp['yearOfBirth'] . ' vs ABHA ' . $abha_yob;
+        }
+        return $out;
+    }
+
     public function find_patient_by_abha($abha_address, $abha_number)
     {
         $num = $abha_number ? preg_replace('/\D/', '', $abha_number) : '';
@@ -245,6 +281,105 @@ class Abdm_model extends CI_Model
         return $obs;
     }
 
+    /** Drop exact duplicates (several prescriptions on one visit often repeat items). */
+    private function unique_rows($rows)
+    {
+        $seen = array();
+        $out = array();
+        foreach ($rows as $r) {
+            $k = strtolower(json_encode($r));
+            if (!isset($seen[$k])) {
+                $seen[$k] = true;
+                $out[] = $r;
+            }
+        }
+        return $out;
+    }
+
+    /** "09 Oct 2026" in the hospital timezone, for care-context names patients can recognise. */
+    private function label_date($dt)
+    {
+        if (!$dt || strpos($dt, '0000-00-00') === 0) {
+            return '';
+        }
+        $d = new DateTime(strlen($dt) === 10 ? $dt . ' 12:00:00' : $dt, $this->tz());
+        return $d->format('d M Y');
+    }
+
+    private function allergies($patient_id, $extra = '')
+    {
+        $p = $this->db->query("SELECT known_allergies FROM patients WHERE id = ?", array((int) $patient_id))->row_array();
+        $all = preg_split('/[,;\n]+/', (string) ($p ? $p['known_allergies'] : '') . ',' . (string) $extra);
+        $out = array();
+        foreach ($all as $a) {
+            $a = trim(strip_tags($a));
+            if ($a !== '' && !preg_match('/^(nil|none|no|na|n\/a|nkda|no known allergies?)$/i', $a)) {
+                $out[strtolower($a)] = $a;
+            }
+        }
+        return array_values($out);
+    }
+
+    /** Lab / radiology tests ordered on these prescriptions → ServiceRequests. */
+    private function ordered_tests($basic_ids)
+    {
+        if (!$basic_ids) {
+            return array();
+        }
+        $in = implode(',', array_map('intval', $basic_ids));
+        $rows = $this->db->query("SELECT p.test_name lab, r.test_name rad FROM ipd_prescription_test t
+            LEFT JOIN pathology p ON p.id = t.pathology_id LEFT JOIN radio r ON r.id = t.radiology_id
+            WHERE t.ipd_prescription_basic_id IN ($in)")->result_array();
+        $out = array();
+        foreach ($rows as $r) {
+            if ($r['lab']) {
+                $out[] = array('text' => $r['lab'], 'category' => 'LAB');
+            }
+            if ($r['rad']) {
+                $out[] = array('text' => $r['rad'], 'category' => 'RAD');
+            }
+        }
+        return $out;
+    }
+
+    /** Follow-up date written by Smart Prescription ("Follow-up on: 18 Oct 2026"). */
+    private function follow_up($basic_ids)
+    {
+        if (!$basic_ids) {
+            return null;
+        }
+        $in = implode(',', array_map('intval', $basic_ids));
+        foreach ($this->db->query("SELECT footer_note FROM ipd_prescription_basic WHERE id IN ($in) ORDER BY id DESC")->result_array() as $r) {
+            if (preg_match('/Follow-up on:\s*([0-9]{1,2} [A-Za-z]{3,9} [0-9]{4})/', strip_tags((string) $r['footer_note']), $m)) {
+                try {
+                    $d = new DateTime($m[1] . ' 10:00:00', $this->tz());
+                    return $d->format('c');
+                } catch (Exception $e) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Uploaded report file (PDF/image) as base64, if present and reasonably small. */
+    private function report_file($value, $dir)
+    {
+        if (!$value) {
+            return null;
+        }
+        $path = FCPATH . (strpos($value, '/') !== false ? ltrim($value, './') : $dir . '/' . $value);
+        if (!is_file($path) || filesize($path) > 5 * 1024 * 1024) {
+            return null;
+        }
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $types = array('pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png');
+        if (!isset($types[$ext])) {
+            return null;
+        }
+        return array('contentType' => $types[$ext], 'title' => basename($path), 'base64' => base64_encode(file_get_contents($path)));
+    }
+
     /** Candidate SQL per entity: id, patient_id, record date, change marker. */
     private function entity_sql()
     {
@@ -276,17 +411,22 @@ class Abdm_model extends CI_Model
                 }
                 $doctor = $this->staff_name($r['cons_doctor']);
                 $meds = array();
+                $basic_ids = array();
                 foreach ($this->db->query("SELECT id FROM ipd_prescription_basic WHERE visit_details_id = ?", array((int) $id))->result_array() as $b) {
+                    $basic_ids[] = (int) $b['id'];
                     $meds = array_merge($meds, $this->prescription_meds($b['id']));
                 }
                 $complaints = trim(strip_tags((string) $r['symptoms']));
                 $date = $r['appointment_date'] ?: ($r['date'] ?: $r['created_at']);
                 return array('patient_id' => $r['patient_id'], 'reference' => 'OPD-' . $r['id'], 'hiType' => 'OPConsultation',
-                    'display' => 'OPD consultation' . ($doctor ? ' - Dr. ' . $doctor : ''), 'recordDate' => $this->iso($date),
+                    'display' => 'OPD consultation ' . $this->label_date($date) . ($doctor ? ' - Dr. ' . $doctor : ''), 'recordDate' => $this->iso($date),
                     'data' => array('doctor' => array('name' => $doctor ?: 'Consultant'),
                         'chiefComplaints' => $complaints !== '' ? array($complaints) : array(),
+                        'allergies' => $this->allergies($r['patient_id'], $r['known_allergies']),
                         'observations' => $this->vitals($r), 'diagnoses' => $this->icd_codes('opd_icd10_codes', 'opd_id', $r['opd_id']),
-                        'medications' => $meds, 'notes' => trim(strip_tags((string) $r['note']))));
+                        'medications' => $this->unique_rows($meds), 'investigations' => $this->unique_rows($this->ordered_tests($basic_ids)),
+                        'followUp' => $this->follow_up($basic_ids),
+                        'notes' => trim(strip_tags((string) $r['note']))));
 
             case 'rx':
                 $b = $this->db->query("SELECT b.*, COALESCE(od.patient_id, ip.patient_id) patient_id, COALESCE(vd.cons_doctor, ip.cons_doctor) doctor_id
@@ -301,7 +441,7 @@ class Abdm_model extends CI_Model
                 }
                 $doctor = $this->staff_name($b['prescribe_by'] ?: $b['doctor_id']);
                 return array('patient_id' => $b['patient_id'], 'reference' => 'RX-' . $b['id'], 'hiType' => 'Prescription',
-                    'display' => ($b['ipd_id'] ? 'IPD' : 'OPD') . ' prescription' . ($doctor ? ' - Dr. ' . $doctor : ''),
+                    'display' => ($b['ipd_id'] ? 'IPD' : 'OPD') . ' prescription ' . $this->label_date($b['date'] ?: $b['created_at']) . ($doctor ? ' - Dr. ' . $doctor : ''),
                     'recordDate' => $this->iso($b['date'] ?: $b['created_at']),
                     'data' => array('doctor' => array('name' => $doctor ?: 'Consultant'), 'medications' => $meds,
                         'notes' => trim(strip_tags($b['header_note'] . "\n" . $b['finding_description'] . "\n" . $b['footer_note']))));
@@ -331,15 +471,21 @@ class Abdm_model extends CI_Model
                         'referenceRange' => $p['reference_range'] ?: null);
                 }
                 $conclusion = trim(strip_tags((string) ($r[$t . '_result'] ?: $r['description'])));
-                if (!$obs && $conclusion === '') {
+                if (!$obs && $conclusion === '' && !$r[$t . '_report']) {
                     return null;
                 }
                 $doctor = $this->staff_name($r['approved_by']);
                 $name   = $r['test_name'] ?: ($r['report_name'] ?: ($lab ? 'Laboratory report' : 'Radiology report'));
+                $rdate = $r['reporting_date'] ?: ($r['collection_date'] ?: $r['created_at']);
+                $data = array('doctor' => array('name' => $doctor ?: ($lab ? 'Pathologist' : 'Radiologist')), 'category' => $lab ? 'LAB' : 'RAD',
+                    'reportName' => $name, 'observations' => $obs, 'conclusion' => $conclusion);
+                $file = $this->report_file($r[$t . '_report'], 'uploads/' . $t . '_report');
+                if ($file) {
+                    $data['pdf'] = $file;
+                }
                 return array('patient_id' => $r['patient_id'], 'reference' => strtoupper($entity) . '-' . $r['id'], 'hiType' => 'DiagnosticReport',
-                    'display' => ($lab ? 'Lab: ' : 'Radiology: ') . $name,
-                    'recordDate' => $this->iso($r['reporting_date'] ?: ($r['collection_date'] ?: $r['created_at'])),
-                    'data' => array('doctor' => array('name' => $doctor ?: 'Pathologist'), 'reportName' => $name, 'observations' => $obs, 'conclusion' => $conclusion));
+                    'display' => ($lab ? 'Lab: ' : 'Radiology: ') . $name . ' ' . $this->label_date($rdate),
+                    'recordDate' => $this->iso($rdate), 'data' => $data);
 
             case 'ds':
                 $d = $this->db->query("SELECT dc.*, COALESCE(ip.patient_id, od.patient_id) patient_id, ip.symptoms, ip.id ipd_id
@@ -360,9 +506,11 @@ class Abdm_model extends CI_Model
                 }
                 $complaints = trim(strip_tags((string) $d['symptoms']));
                 return array('patient_id' => $d['patient_id'], 'reference' => 'DS-' . $d['id'], 'hiType' => 'DischargeSummary',
-                    'display' => 'Discharge summary', 'recordDate' => $this->iso($d['discharge_date'] ?: $d['created_at']),
+                    'display' => 'Discharge summary ' . $this->label_date($d['discharge_date'] ?: $d['created_at']),
+                    'recordDate' => $this->iso($d['discharge_date'] ?: $d['created_at']),
                     'data' => array('doctor' => array('name' => $this->staff_name($d['discharge_by']) ?: 'Consultant'),
                         'chiefComplaints' => $complaints !== '' ? array($complaints) : array(), 'diagnoses' => $diag,
+                        'allergies' => $this->allergies($d['patient_id']),
                         'medications' => array(), 'notes' => implode("\n", $notes)));
         }
         return null;

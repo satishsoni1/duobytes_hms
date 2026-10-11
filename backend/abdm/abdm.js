@@ -91,6 +91,27 @@
       await attach(S.token);
     });
 
+    // ---- ABHA card QR (scanner types the JSON payload into the field)
+    const qr = $('#v-qr');
+    if (qr) {
+      const parseQr = () => {
+        let d;
+        try { d = JSON.parse(qr.value.trim()); } catch { return; }
+        const num = d.hidn || d.abhaNumber || d.abha_number || d.ABHANumber || '';
+        const addr = d.hid || d.phr || d.abhaAddress || d.abha_address || '';
+        if (!num && !addr) { $('#v-qr-info').innerHTML = '<span class="text-danger">This QR is not an ABHA card QR.</span>'; return; }
+        $('#v-method').value = num ? 'abha-number:mobile' : 'mobile:mobile';
+        $('#v-id').value = num || '';
+        $('#v-qr-info').innerHTML = `<div class="alert alert-info py-1 px-2 mb-0">Scanned ABHA: <strong>${esc(d.name || '')}</strong>
+          ${esc([d.gender, d.dob || d.yob].filter(Boolean).join(' · '))} · ${esc(num)} ${esc(addr)}<br>
+          <span class="text-muted">Compare with the patient, then click Send OTP to verify and attach.</span></div>`;
+        qr.value = '';
+      };
+      qr.addEventListener('change', parseQr);
+      qr.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); parseQr(); } });
+      qr.addEventListener('paste', () => setTimeout(parseQr, 0));
+    }
+
     // ---- ABHA: verify existing
     bind($('#v-send'), async () => {
       S.method = $('#v-method').value;
@@ -117,7 +138,13 @@
     async function attach(token) {
       if (!token) throw new Error('No ABHA session token returned');
       S.token = token;
-      const r = await api('save_abha/' + PID, { token });
+      let r = await api('save_abha/' + PID, { token });
+      if (r.mismatch) {
+        const msg = 'The ABHA details do not match this patient:\n\n- ' + r.mismatch.join('\n- ')
+          + '\n\nAttach only if you have confirmed this is the same person (e.g. checked an ID). Attach anyway?';
+        if (!confirm(msg)) throw new Error('ABHA not attached: details did not match this patient.');
+        r = await api('save_abha/' + PID, { token, confirmMismatch: true });
+      }
       ok(`ABHA ${r.abhaNumber || ''} ${r.abhaAddress || ''} attached`);
       $('#abha-current').innerHTML = `<strong>${esc(r.abhaNumber || '')}</strong> · ${esc(r.abhaAddress || '')} <span class="badge bg-success">Verified now</span>`;
       show($('#abha-card-actions'));
@@ -143,6 +170,10 @@
       const r = await api('sync_patient/' + PID, {});
       ok(`Synced: ${r.sent} sent, ${r.unchanged} unchanged` + (r.errors.length ? `. Errors: ${r.errors.join('; ')}` : ''));
       setTimeout(() => location.reload(), 800);
+    });
+    bind($('#abdm-sms'), async () => {
+      await api('sms_link/' + PID, {});
+      ok('ABDM will send the patient an SMS with steps to link these records.');
     });
     bind($('#abdm-link'), async () => {
       const r = await api('link/' + PID, {});
