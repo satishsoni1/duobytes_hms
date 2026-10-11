@@ -6252,6 +6252,8 @@ $(".addcharges").click(function(){
 });
 
   $(document).on('click','.addprescription',function(){
+     // Smart Prescription (one-screen prescribing); 'Classic form' inside it falls back to this original modal.
+     if (window.SmartRx && !window.__srxClassic) { var _btn = this; SmartRx.open('ipd', ipd_id, function () { window.__srxClassic = true; $(_btn).trigger('click'); window.__srxClassic = false; }); return false; }
      $.ajax({
             url: base_url+'admin/prescription/addipdPrescription',
             dataType:'JSON',
@@ -7852,4 +7854,7 @@ function makeid(length) {
 })();
 </script>
 
-<!-- //========datatable end===== -->   
+<!-- //========datatable end===== -->
+
+<link rel="stylesheet" href="<?php echo base_url('backend/smartrx/smartrx.css'); ?>">
+<script src="<?php echo base_url('backend/smartrx/smartrx.js'); ?>"></script>

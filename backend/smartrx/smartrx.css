@@ -1,0 +1,37 @@
+/* Smart Prescription */
+#smartrx-modal .srx-head { align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+#smartrx-modal .srx-patient { flex: 1; min-width: 240px; font-size: 15px; }
+#smartrx-modal .srx-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#smartrx-modal .srx-label { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+#smartrx-modal .srx-search { position: relative; }
+#smartrx-modal .srx-dropdown { position: absolute; z-index: 1080; left: 0; right: 0; top: 100%; max-height: 300px; overflow: auto;
+  background: var(--bs-body-bg, #fff); border: 1px solid var(--bs-border-color, #dee2e6); border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+#smartrx-modal .srx-opt { padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--bs-border-color-translucent, #f1f1f1); }
+#smartrx-modal .srx-opt.active, #smartrx-modal .srx-opt:hover { background: var(--bs-primary-bg-subtle, #e7f1ff); }
+#smartrx-modal .srx-chips, #smartrx-modal .srx-cell-chips, #smartrx-modal .srx-frequent { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+#smartrx-modal .srx-chip { border: 1px solid var(--bs-border-color, #ced4da); background: transparent; border-radius: 14px; padding: 2px 10px; font-size: 13px; line-height: 1.6; }
+#smartrx-modal .srx-chip-sm { font-size: 12px; padding: 1px 8px; }
+#smartrx-modal .srx-chip.active { background: var(--bs-primary, #0d6efd); border-color: var(--bs-primary, #0d6efd); color: #fff; }
+#smartrx-modal .srx-chip:focus-visible { outline: 2px solid var(--bs-primary, #0d6efd); outline-offset: 1px; }
+#smartrx-modal .srx-more { width: auto; min-width: 90px; }
+#smartrx-modal .srx-tag { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--bs-border-color, #ced4da); border-radius: 6px; padding: 2px 6px; font-size: 13px; }
+#smartrx-modal .btn-close-sm { width: .5em; height: .5em; }
+#smartrx-modal .srx-table td { vertical-align: top; }
+#smartrx-modal tr.srx-missing td { background: rgba(255, 193, 7, .08); }
+#smartrx-modal td.srx-need .srx-cell-chips { outline: 1px dashed var(--bs-danger, #dc3545); outline-offset: 2px; border-radius: 6px; }
+#smartrx-modal .srx-foot { flex-wrap: wrap; }
+
+/* Theme-proofing: Smart Hospital's theme restyles buttons and modals. */
+#smartrx-modal .modal-dialog { max-width: min(1200px, 96vw); margin: 1rem auto; height: calc(100vh - 2rem); }
+#smartrx-modal .modal-content { max-height: calc(100vh - 2rem); height: 100%; display: flex; flex-direction: column; }
+#smartrx-modal .modal-body { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+#smartrx-modal .modal-footer { flex-shrink: 0; position: sticky; bottom: 0; background: var(--bs-body-bg, #fff); }
+#smartrx-modal button.srx-chip { border: 1px solid #b8c2cc !important; background: #fff !important; color: #1f2937 !important;
+  border-radius: 14px !important; box-shadow: none !important; }
+#smartrx-modal button.srx-chip:hover { border-color: #0d6efd !important; color: #0d6efd !important; }
+#smartrx-modal button.srx-chip.active { background: #0d6efd !important; border-color: #0d6efd !important; color: #fff !important; }
+#smartrx-modal .srx-tag { border: 1px solid #b8c2cc !important; background: #f8fafc; border-radius: 6px; padding: 2px 8px; }
+@media (prefers-color-scheme: dark) {
+  #smartrx-modal button.srx-chip { background: transparent !important; color: inherit !important; border-color: #4b5563 !important; }
+  #smartrx-modal .srx-tag { background: transparent; border-color: #4b5563 !important; }
+}

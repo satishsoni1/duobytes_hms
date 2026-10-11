@@ -4738,7 +4738,9 @@ $(document).on('input paste keyup','.apply_charge_add_charge,.discount_percentag
         }));
     }); 
 
-    function getRecord_id(visitid) {    
+    function getRecord_id(visitid) {
+        // Smart Prescription (one-screen prescribing); 'Classic form' inside it falls back to the original modal.
+        if (window.SmartRx && !window.__srxClassic) { return SmartRx.open('opd', visitid, function () { window.__srxClassic = true; getRecord_id(visitid); window.__srxClassic = false; }); }    
        
         $.ajax({
             url: base_url+'admin/prescription/addopdPrescription',
@@ -7186,3 +7188,6 @@ function reset_value(){
     updateArrows();
 })();
 </script>
+
+<link rel="stylesheet" href="<?php echo base_url('backend/smartrx/smartrx.css'); ?>">
+<script src="<?php echo base_url('backend/smartrx/smartrx.js'); ?>"></script>

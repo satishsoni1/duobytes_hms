@@ -2440,7 +2440,9 @@ window.location.href = baseurl+'admin/patient/search';
         }));
     });     
  
-     function getRecord_id(visitid) { 
+     function getRecord_id(visitid) {
+        // Smart Prescription (one-screen prescribing); 'Classic form' inside it falls back to the original modal.
+        if (window.SmartRx && !window.__srxClassic) { return SmartRx.open('opd', visitid, function () { window.__srxClassic = true; getRecord_id(visitid); window.__srxClassic = false; }); } 
 
         $('#prescription_title').html('<?php echo $this->lang->line('add_prescription'); ?>');
          $.ajax({
@@ -4453,3 +4455,6 @@ function patientSidebarEsc(s) { return $('<div>').text(s == null ? '' : s).html(
         }
     });
 </script>
+
+<link rel="stylesheet" href="<?php echo base_url('backend/smartrx/smartrx.css'); ?>">
+<script src="<?php echo base_url('backend/smartrx/smartrx.js'); ?>"></script>
