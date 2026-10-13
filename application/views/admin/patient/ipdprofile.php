@@ -73,7 +73,7 @@ $categorylist = $this->operationtheatre_model->category_list();
                               <span class="badge ms-1 sh-badge-admitted"><span></span><?php echo $this->lang->line('admitted'); ?></span>
                             <?php endif; ?>
                             <?php if ($result['is_antenatal'] == 1): ?><span class="badge ms-1 sh-badge-antenatal">Antenatal</span><?php endif; ?>
-                            <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_view') || $this->rbac->hasPrivilege('abdm_records', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/abdm/patient/' . (int) $result['patient_id']); ?>"><i class="fa fa-id-card"></i> ABHA / ABDM</a><?php endif; ?>
+                            <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_view') || $this->rbac->hasPrivilege('abdm_records', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/abdm/patient/' . (int) $result['patient_id']); ?>"><i class="fas fa-id-card"></i> ABHA / ABDM</a><?php endif; ?>
                           </h1>
                           <div class="sub">
                             <span class="mono"><?php echo html_escape($result['case_reference_id']); ?> &middot; <?php echo $this->customlib->getSessionPrefixByType('ipd_no').$ipdid; ?></span>
