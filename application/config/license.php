@@ -6,4 +6,3 @@ if (!defined('BASEPATH')) {
 
 $config['envato_market_purchase_code'] = '';
 $config['envato_market_username'] = '';
-$config['SHLK'] = '';

@@ -39,37 +39,6 @@
                                                     <button type="button" data-product-id="<?php echo $content_value->product_id; ?>" data-directory="<?php echo $content_value->directory; ?>" class="btn btn-success  btn-sm install" data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> <?php echo $this->lang->line('please_wait'); ?>"><?php echo $this->lang->line('install');?></button>
 
                                                     <?php
-                                                } elseif (is_dir($check_folder_exists) && !IsNullOrEmptyString($content_value->current_version) && !IsNullOrEmptyString($content_value->update_version)) {
-                                                    $version = $this->config->item('addon_ver', $content_value->config_name);
-
-                                                    if (!$this->auth->addonchk($content_value->short_name, false)) {
-                                                    ?>
-                                                        <a href="#" class="btn btn-warning btn-sm" data-addon-version="<?php echo $version; ?>" data-addon="<?php echo $content_value->short_name;?>" data-bs-toggle="modal" data-bs-target="#addonModal"><i class="fa fa-unlock-alt" aria-hidden="true"></i> <?php echo $this->lang->line('register'); ?></a>
-                                                        <button type="button" data-product-id="<?php echo $content_value->product_id; ?>" data-directory="<?php echo $content_value->directory; ?>" class="btn btn-danger  btn-sm uninstall" data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> <?php echo $this->lang->line('please_wait'); ?>"><?php echo $this->lang->line('unistall'); ?></button>
-                                                    <?php
-                                                    } else {
-                                                    ?>
-                                                 
-                                                        <button type="button" class="btn btn-success  btn-sm" data-addon-name="<?php echo $content_value->short_name;?>" data-product-id="<?php echo $content_value->product_id; ?>" data-directory="<?php echo $content_value->directory; ?>"  data-bs-toggle="modal" data-bs-target="#addonUpdateModal"><?php echo $this->lang->line('update'); ?></button>
-
-                                                        <button type="button" data-product-id="<?php echo $content_value->product_id; ?>" data-directory="<?php echo $content_value->directory; ?>" class="btn btn-danger  btn-sm uninstall" data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> <?php echo $this->lang->line('please_wait'); ?>"><?php echo $this->lang->line('unistall'); ?></button>
-                                                        
-                                                    <?php
-                                                    }
-                                                    ?>
-                                                    <?php
-                                                } elseif (is_dir($check_folder_exists) && !IsNullOrEmptyString($content_value->current_version) && IsNullOrEmptyString($content_value->update_version)) {
-                                                    $version = $this->config->item('addon_ver', $content_value->config_name);
-                                                    if (!$this->auth->addonchk($content_value->short_name, false)) {
-                                                    ?>
-                                                        <a href="#" class="btn btn-warning btn-sm" data-addon-version="<?php echo $version; ?>" data-addon="<?php echo $content_value->short_name;?>" data-bs-toggle="modal" data-bs-target="#addonModal"><i class="fa fa-unlock-alt" aria-hidden="true"></i> <?php echo $this->lang->line('register'); ?></a>
-                                                        <button type="button" data-product-id="<?php echo $content_value->product_id; ?>" data-directory="<?php echo $content_value->directory; ?>" class="btn btn-danger  btn-sm uninstall" data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> <?php echo $this->lang->line('please_wait'); ?>"><?php echo $this->lang->line('unistall'); ?></button>
-                                                    <?php
-                                                    } else {
-                                                    ?>
-                                                        <button type="button" data-product-id="<?php echo $content_value->product_id; ?>" data-directory="<?php echo $content_value->directory; ?>" class="btn btn-danger  btn-sm uninstall" data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> <?php echo $this->lang->line('please_wait'); ?>"><?php echo $this->lang->line('unistall'); ?></button>
-                                                <?php
-                                                    }
                                                 }
 
                                                 ?>

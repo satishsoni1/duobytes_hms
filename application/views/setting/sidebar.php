@@ -30,13 +30,6 @@
                 <li><a class="<?php echo set_Innermenu('smsconfig/index'); ?>" href="<?php echo base_url(); ?>smsconfig"><?php echo $this->lang->line('sms_setting'); ?></a></li>
             <?php } ?>
 
-			<?php
-			if($this->auth->addonchk('shwm')){
-           if ($this->module_lib->hasModule('whatsapp_messaging') && $this->module_lib->hasActive('whatsapp_messaging')) {
-            if($this->rbac->hasPrivilege('whatsapp_setting', 'can_view')) { ?>
-                <li><a class="<?php echo set_Innermenu('whatsappconfig/index'); ?>" href="<?php echo base_url(); ?>whatsappconfig"><?php echo $this->lang->line('whatsapp_setting'); ?></a></li>
-		   <?php } }
-            } ?>
 
 			<?php if ($this->rbac->hasPrivilege('email_setting', 'can_view')) { ?>
                 <li><a class="<?php echo set_Innermenu('emailconfig/index'); ?>" href="<?php echo base_url(); ?>emailconfig"><?php echo $this->lang->line('email_setting'); ?></a></li>

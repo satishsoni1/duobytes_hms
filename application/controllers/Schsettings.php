@@ -21,7 +21,7 @@ class Schsettings extends Admin_Controller
     public function index()
     {        
         $app_ver         = $this->config->item('app_ver');
-        $data['app_response']   = $this->auth->andapp_validate();     
+        $data['app_response']   = [];     
 
         $this->session->set_userdata('top_menu', 'setup');
         $this->session->set_userdata('sub_menu', 'schsettings/index');

@@ -1,0 +1,20 @@
+/* IPD Case Sheet screens (application/views/admin/casesheet/index.php) */
+#cs-root .cs-h { font-weight: 600; font-size: .9rem; text-transform: uppercase; letter-spacing: .03em; color: #456; margin: .25rem 0 .5rem; }
+#cs-root .cs-grid th { white-space: nowrap; font-size: .8rem; background: #f6f8fa; vertical-align: middle; }
+#cs-root .cs-grid td { padding: 2px; min-width: 84px; }
+#cs-root .cs-grid input { padding-left: 2px; padding-right: 2px; }
+#cs-root .cs-grid input { border-color: transparent; text-align: center; }
+#cs-root .cs-grid input:focus { border-color: #86b7fe; }
+#cs-root .cs-rows td { padding: 2px; }
+#cs-root .cs-rows td:first-child { min-width: 170px; }
+#cs-root .cs-rows td input { min-width: 64px; }
+#cs-root .cs-medchart th { font-size: .8rem; background: #f6f8fa; white-space: nowrap; }
+#cs-root .cs-medchart td { vertical-align: top; }
+#cs-root .cs-doses { min-width: 74px; }
+#cs-root .cs-dose { display: block; width: 100%; margin: 1px 0; padding: 1px 4px; font-size: .75rem; border: 1px dashed #b8c2cc; border-radius: 4px; background: #fff; color: #567; }
+#cs-root .cs-dose.given { border: 1px solid #198754; background: #e8f5ee; color: #146c43; font-weight: 600; }
+#cs-root .cs-dose.given::before { content: "\2713 "; }
+#cs-root .cs-dose:disabled { cursor: default; }
+#cs-root .cs-dose-add { border-style: dotted; color: #999; }
+#cs-root .cs-stopped td { opacity: .55; }
+#cs-root fieldset:disabled .cs-row-add, #cs-root fieldset:disabled .cs-row-del { display: none; }

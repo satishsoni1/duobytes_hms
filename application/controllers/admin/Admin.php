@@ -36,51 +36,6 @@ class Admin extends Admin_Controller
         $id     = $this->customlib->getLoggedInUserID();
         $result = $this->staff_model->get($id);
     }    
-
-    public function updatePurchaseCode()
-    {
-        $this->form_validation->set_rules('email', $this->lang->line('email'), 'required|valid_email|trim|xss_clean');
-        $this->form_validation->set_rules('envato_market_purchase_code', $this->lang->line('purchase_code'), 'required|trim|xss_clean');
-
-        if ($this->form_validation->run() == false) {
-            $data = array(
-                'email'                       => form_error('email'),
-                'envato_market_purchase_code' => form_error('envato_market_purchase_code'),
-            );
-            $array = array('status' => '2', 'error' => $data);
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(200)
-                ->set_output(json_encode($array));
-        } else {
-
-            $response = $this->auth->app_update();
-        }
-    }
-
-    public function updateaddon()
-    {
-        $this->form_validation->set_rules('app-email', $this->lang->line('email'), 'required|valid_email|trim|xss_clean');
-        $this->form_validation->set_rules('app-envato_market_purchase_code', $this->lang->line('purchase_code'), 'required|trim|xss_clean');
-
-        if ($this->form_validation->run() == false) {
-
-            $data = array(
-                'app-email'                       => form_error('app-email'),
-                'app-envato_market_purchase_code' => form_error('app-envato_market_purchase_code'),
-            );
-            
-            $array = array('status' => '2', 'error' => $data);
-
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(200)
-                ->set_output(json_encode($array));
-        } else {
-            //==================
-            $response = $this->auth->addon_update();
-        }
-    }
     
     public function backup()
     {
@@ -987,27 +942,5 @@ class Admin extends Admin_Controller
         $this->load->view('layout/header', $data);
         $this->load->view('admin/dashboard', $data);
         $this->load->view('layout/footer', $data);
-    }
-
-    public function updateandappCode()
-    {
-        $this->form_validation->set_rules('app-email', $this->lang->line('email'), 'required|valid_email|trim|xss_clean');
-        $this->form_validation->set_rules('app-envato_market_purchase_code', $this->lang->line('purchase_code'), 'required|trim|xss_clean');
-
-        if ($this->form_validation->run() == false) {
-            $data = array(
-                'app-email'                       => form_error('app-email'),
-                'app-envato_market_purchase_code' => form_error('app-envato_market_purchase_code'),
-            );
-            $array = array('status' => '2', 'error' => $data);
-
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(200)
-                ->set_output(json_encode($array));
-        } else {
-            //==================
-            $response = $this->auth->andapp_update();
-        }
     }
 }

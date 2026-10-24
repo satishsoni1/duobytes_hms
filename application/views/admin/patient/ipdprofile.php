@@ -74,6 +74,7 @@ $categorylist = $this->operationtheatre_model->category_list();
                             <?php endif; ?>
                             <?php if ($result['is_antenatal'] == 1): ?><span class="badge ms-1 sh-badge-antenatal">Antenatal</span><?php endif; ?>
                             <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_view') || $this->rbac->hasPrivilege('abdm_records', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/abdm/patient/' . (int) $result['patient_id']); ?>"><i class="fas fa-id-card"></i> ABHA / ABDM</a><?php endif; ?>
+                            <?php if ($this->rbac->hasPrivilege('ipd_patient', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/casesheet/index/' . (int) $ipdid); ?>"><i class="fas fa-notes-medical"></i> Case Sheet / Discharge Summary</a><?php endif; ?>
                           </h1>
                           <div class="sub">
                             <span class="mono"><?php echo html_escape($result['case_reference_id']); ?> &middot; <?php echo $this->customlib->getSessionPrefixByType('ipd_no').$ipdid; ?></span>

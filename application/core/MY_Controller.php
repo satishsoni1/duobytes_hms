@@ -75,43 +75,7 @@ class Admin_Controller extends MY_Controller
         parent::__construct();
         $this->load->library('rbac');
         $this->auth->is_logged_in();
-        $this->check_license();       
-    }
-  
-    public function check_license()
-    {
-        $license = $this->config->item('SHLK');
-        if (!empty($license)) {
-            $regex = "/^[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{6}-/";
-
-            if (preg_match($regex, $license)) {
-                $valid_string = $this->aes->validchk('encrypt', base_url());
-                if (strpos($license, $valid_string) !== false) {
-                    true; //valid
-                } else {
-                    $this->update_ss_routine();
-                }
-            } else {
-                $this->update_ss_routine();
-
-            }
-        }
-    }
-	
-    public function update_ss_routine()
-    {
-        $license       = $this->config->item('SHLK');
-        $fname         = APPPATH . 'config/license.php';
-        $update_handle = fopen($fname, "r");
-        $content       = fread($update_handle, filesize($fname));
-        $file_contents = str_replace('$config[\'SHLK\'] = \'' . $license . '\'', '$config[\'SHLK\'] = \'\'', $content);
-        $update_handle = fopen($fname, 'w') or die("can't open file");
-        if (fwrite($update_handle, $file_contents)) {
-
-        }
-        fclose($update_handle);
-
-        $this->config->set_item('SHLK', '');
+        //$this->check_license();       
     }
 
 }
