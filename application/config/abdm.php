@@ -2,11 +2,11 @@
 /*
 | ABDM (Ayushman Bharat Digital Mission) integration.
 | Smart Hospital talks to the ABDM bridge service, which handles the ABDM gateway protocol and encryption.
-| Values can also come from environment variables of the same name (ABDM_BRIDGE_URL, ABDM_API_KEY, ABDM_CRON_KEY).
+| All values come from .env in the project root (see .env.example) or real environment variables.
 */
 
 // Master switch.
-$config['abdm_enabled'] = true;
+$config['abdm_enabled'] = filter_var(getenv('ABDM_ENABLED') !== FALSE ? getenv('ABDM_ENABLED') : 'true', FILTER_VALIDATE_BOOLEAN);
 
 // Base URL of the ABDM bridge, e.g. https://abdm.yourhospital.in
 $config['abdm_bridge_url'] = getenv('ABDM_BRIDGE_URL') ?: '';
@@ -18,13 +18,13 @@ $config['abdm_api_key'] = getenv('ABDM_API_KEY') ?: '';
 $config['abdm_cron_key'] = getenv('ABDM_CRON_KEY') ?: '';
 
 // Prefix for the patient reference number shared with ABDM (MRN). Never change after go-live.
-$config['abdm_mrn_prefix'] = 'SH';
+$config['abdm_mrn_prefix'] = getenv('ABDM_MRN_PREFIX') ?: 'SH';
 
 // Only records on/after this date are shared (avoids pushing years of history on day one).
-$config['abdm_sync_from'] = '2024-01-01';
+$config['abdm_sync_from'] = getenv('ABDM_SYNC_FROM') ?: '2024-01-01';
 
 // Re-check records changed in the last N days on every sync run (edits to reports, prescriptions...).
-$config['abdm_resync_days'] = 7;
+$config['abdm_resync_days'] = (int) (getenv('ABDM_RESYNC_DAYS') ?: 7);
 
 // Max records sent per sync run (keep cron runs short on shared hosting).
-$config['abdm_batch_size'] = 200;
+$config['abdm_batch_size'] = (int) (getenv('ABDM_BATCH_SIZE') ?: 200);

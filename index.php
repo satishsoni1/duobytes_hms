@@ -56,6 +56,31 @@
  
     ini_set('max_execution_time', 3000); // 0 = Unlimited
 	
+	// Load KEY=VALUE pairs from .env (not in git) into the environment.
+	// Real server environment variables take precedence over the file.
+	if (is_readable(__DIR__.'/.env'))
+	{
+		foreach (file(__DIR__.'/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line)
+		{
+			$line = trim($line);
+			if ($line === '' || $line[0] === '#' || strpos($line, '=') === FALSE)
+			{
+				continue;
+			}
+			list($key, $value) = array_map('trim', explode('=', $line, 2));
+			if (preg_match('/^([\'"])(.*)\1$/', $value, $m))
+			{
+				$value = $m[2];
+			}
+			if ($key !== '' && getenv($key) === FALSE)
+			{
+				putenv($key.'='.$value);
+				$_ENV[$key] = $_SERVER[$key] = $value;
+			}
+		}
+		unset($line, $key, $value, $m);
+	}
+
 	// 'production' unless CI_ENV is set (e.g. CI_ENV=development for a local test copy).
 	define('ENVIRONMENT', getenv('CI_ENV') ?: (isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'production'));
 

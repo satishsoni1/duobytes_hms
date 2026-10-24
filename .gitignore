@@ -6,3 +6,6 @@ temp/
 
 # Local test-copy config (contains a bridge API key)
 application/config/development/
+
+# Per-server settings and secrets
+.env

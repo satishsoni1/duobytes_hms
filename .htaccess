@@ -15,3 +15,14 @@ RewriteRule ^(.*)$ index.php?/$1 [L]
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/css text/javascript application/javascript application/json text/html text/xml application/xml image/svg+xml
 </IfModule>
+
+# Never serve .env (contains secrets)
+<FilesMatch "^\.env">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
