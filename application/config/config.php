@@ -23,7 +23,20 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | a PHP script and you can easily do that on your own.
 |
 */
-$config['base_url'] = 'http://localhost:8888/';
+// Resolved per environment so the same file works locally and on the server:
+// an explicit BASE_URL env var wins, otherwise derive it from the request.
+if (getenv('BASE_URL')) {
+    $config['base_url'] = rtrim(getenv('BASE_URL'), '/') . '/';
+} elseif (!empty($_SERVER['HTTP_HOST'])) {
+    $https = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
+    $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', $_SERVER['HTTP_HOST']);
+    $path = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+    $config['base_url'] = ($https ? 'https' : 'http') . '://' . $host . $path . '/';
+} else {
+    $config['base_url'] = 'http://localhost:8888/';
+}
 
 /*
 |--------------------------------------------------------------------------
