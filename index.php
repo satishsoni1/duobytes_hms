@@ -56,13 +56,15 @@
  
     ini_set('max_execution_time', 3000); // 0 = Unlimited
 	
-	// Load KEY=VALUE pairs from .env (not in git) into the environment.
+	// Load KEY=VALUE pairs from .env (not in git). Values are kept in $_ENV/$_SERVER as
+	// well as putenv(), because some hosts disable putenv() or hide it from getenv().
 	// Real server environment variables take precedence over the file.
-	if (is_readable(__DIR__.'/.env'))
+	define('ENV_FILE_LOADED', is_readable(__DIR__.'/.env'));
+	if (ENV_FILE_LOADED)
 	{
 		foreach (file(__DIR__.'/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line)
 		{
-			$line = trim($line);
+			$line = trim(preg_replace('/^\xEF\xBB\xBF/', '', $line));
 			if ($line === '' || $line[0] === '#' || strpos($line, '=') === FALSE)
 			{
 				continue;
@@ -74,15 +76,27 @@
 			}
 			if ($key !== '' && getenv($key) === FALSE)
 			{
-				putenv($key.'='.$value);
+				if (function_exists('putenv'))
+				{
+					@putenv($key.'='.$value);
+				}
 				$_ENV[$key] = $_SERVER[$key] = $value;
 			}
 		}
 		unset($line, $key, $value, $m);
 	}
 
+	// Read a setting from the environment / .env; $default when unset or empty.
+	function env($key, $default = NULL)
+	{
+		if (isset($_ENV[$key]) && $_ENV[$key] !== '') return $_ENV[$key];
+		if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return $_SERVER[$key];
+		$value = getenv($key);
+		return ($value === FALSE || $value === '') ? $default : $value;
+	}
+
 	// 'production' unless CI_ENV is set (e.g. CI_ENV=development for a local test copy).
-	define('ENVIRONMENT', getenv('CI_ENV') ?: (isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'production'));
+	define('ENVIRONMENT', env('CI_ENV', 'production'));
 
 /*
  *---------------------------------------------------------------

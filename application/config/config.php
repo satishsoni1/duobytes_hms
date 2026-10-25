@@ -25,8 +25,8 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 */
 // Resolved per environment so the same file works locally and on the server:
 // an explicit BASE_URL env var wins, otherwise derive it from the request.
-if (getenv('BASE_URL')) {
-    $config['base_url'] = rtrim(getenv('BASE_URL'), '/') . '/';
+if (env('BASE_URL')) {
+    $config['base_url'] = rtrim(env('BASE_URL'), '/') . '/';
 } elseif (!empty($_SERVER['HTTP_HOST'])) {
     $https = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
         || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')

@@ -5,10 +5,10 @@ $query_builder = true;
 $db['default'] = array(
     'dsn'          => '',
     // Connection details come from .env (see .env.example) - never commit them here.
-    'hostname'     => getenv('DB_HOST') ?: 'localhost',
-    'username'     => getenv('DB_USERNAME') ?: '',
-    'password'     => getenv('DB_PASSWORD') ?: '',
-    'database'     => getenv('DB_DATABASE') ?: '',
+    'hostname'     => env('DB_HOST', 'localhost'),
+    'username'     => env('DB_USERNAME', ''),
+    'password'     => env('DB_PASSWORD', ''),
+    'database'     => env('DB_DATABASE', ''),
     'dbdriver'     => 'mysqli',
     'dbprefix'     => '',
     'pconnect'     => false,
@@ -31,7 +31,14 @@ $active_group = 'default';
 // Branch databases come from the multi_branch table. Looking them up needs its own
 // connection, so the result is cached for 10 minutes instead of querying on every
 // request (shared hosting caps connections per hour).
-$branch_cache = APPPATH . 'cache/multi_branch_db.php';
+$branch_dir   = APPPATH . 'cache';
+if (!is_dir($branch_dir)) {
+    @mkdir($branch_dir, 0755, true);
+}
+if (!is_writable($branch_dir)) {
+    $branch_dir = sys_get_temp_dir(); // cache folder missing after a git deploy, or not writable
+}
+$branch_cache = $branch_dir . '/sh_multi_branch_db_' . md5(APPPATH) . '.php';
 $branch_rows  = null;
 if (is_file($branch_cache) && filemtime($branch_cache) > time() - 600) {
     $branch_rows = include $branch_cache;
@@ -40,27 +47,39 @@ if (is_file($branch_cache) && filemtime($branch_cache) > time() - 600) {
 if (!is_array($branch_rows)) {
     $branch_rows = array();
     $mydb        = $db['default'];
-    $mysqli      = new mysqli($mydb['hostname'], $mydb["username"], $mydb["password"], $mydb["database"]);
+    try {
+        $mysqli = new mysqli($mydb['hostname'], $mydb["username"], $mydb["password"], $mydb["database"]);
+        $db_error = $mysqli->connect_errno ? $mysqli->connect_error : '';
+    } catch (mysqli_sql_exception $e) {
+        $db_error = $e->getMessage();
+    }
 
-    if ($mysqli->connect_errno) {
-        printf("connection failed: %s\n", $mysqli->connect_error);
+    if ($db_error !== '') {
+        // Say why, without revealing credentials: most failures are a missing or unread .env.
+        $hint = !ENV_FILE_LOADED ? ' (.env not found next to index.php)'
+            : (env('DB_HOST') === NULL ? ' (.env found but DB_HOST is not set)' : '');
+        printf("connection failed: %s%s\n", $db_error, $hint);
         exit();
     }
 
-    if ($results = $mysqli->query("SHOW TABLES LIKE 'multi_branch'")) {
-        if ($results->num_rows == 1) {
-            if ($result = $mysqli->query("SELECT * FROM multi_branch where is_verified =1")) {
-                while ($row = $result->fetch_assoc()) {
-                    $branch_rows[] = array(
-                        'id'            => $row['id'],
-                        'hostname'      => $row['hostname'],
-                        'username'      => $row['username'],
-                        'password'      => $row['password'],
-                        'database_name' => $row['database_name'],
-                    );
+    try {
+        if ($results = $mysqli->query("SHOW TABLES LIKE 'multi_branch'")) {
+            if ($results->num_rows == 1) {
+                if ($result = $mysqli->query("SELECT * FROM multi_branch where is_verified =1")) {
+                    while ($row = $result->fetch_assoc()) {
+                        $branch_rows[] = array(
+                            'id'            => $row['id'],
+                            'hostname'      => $row['hostname'],
+                            'username'      => $row['username'],
+                            'password'      => $row['password'],
+                            'database_name' => $row['database_name'],
+                        );
+                    }
                 }
             }
         }
+    } catch (mysqli_sql_exception $e) {
+        log_message('error', 'multi_branch lookup failed: ' . $e->getMessage());
     }
     $mysqli->close();
 

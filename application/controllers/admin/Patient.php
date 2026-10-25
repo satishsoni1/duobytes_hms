@@ -3887,6 +3887,10 @@ This Function is used to Import Multiple Patient Records
         
         $file_exists  = FCPATH . "uploads/patient_id_card/barcodes/$id.png";
         $file_exists2 = FCPATH . "uploads/patient_id_card/qrcode/$id.png";
+        // Patients created outside the app (SQL import / demo seed) have no images yet.
+        if (!file_exists($file_exists) || !file_exists($file_exists2)) {
+            $this->customlib->generatebarcode($id);
+        }
 
         if(file_exists($file_exists)){
             $result['getbarcode'] = base_url("uploads/patient_id_card/barcodes/$id.png") . img_time();
@@ -3950,6 +3954,10 @@ This Function is used to Import Multiple Patient Records
 
         $path1= $this->customlib->getFolderPath()."./uploads/patient_id_card/barcodes/$id.png";
         $path2= $this->customlib->getFolderPath()."./uploads/patient_id_card/qrcode/$id.png";
+        // Patients created outside the app (SQL import / demo seed) have no images yet.
+        if (!file_exists($path1) || !file_exists($path2)) {
+            $this->customlib->generatebarcode($id);
+        }
 
         if(file_exists("$path1")){
             $getbarcode=$this->media_storage->getImageURL("./uploads/patient_id_card/barcodes/$id.png");
