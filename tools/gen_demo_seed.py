@@ -344,6 +344,23 @@ for k, n in [('admin', 'Admin'), ('acct', 'Accountant'), ('doctor', 'Doctor'), (
     emit(f"SET @role_{k} = (SELECT id FROM roles WHERE name = {q(n)} ORDER BY id LIMIT 1);")
 
 # ---------------------------------------------------------------------------
+emit('')
+emit('-- ICD-10 diagnosis codes')
+ICD = {}
+for code, desc in [('B34.9', 'Viral infection, unspecified'), ('R50.9', 'Fever, unspecified'),
+                   ('J06.9', 'Acute upper respiratory infection, unspecified'), ('J02.9', 'Acute pharyngitis, unspecified'),
+                   ('N92.6', 'Irregular menstruation, unspecified'), ('E03.9', 'Hypothyroidism, unspecified'),
+                   ('I50.9', 'Heart failure, unspecified'), ('I10', 'Essential (primary) hypertension'),
+                   ('E78.5', 'Hyperlipidaemia, unspecified'), ('Z34.90', 'Supervision of normal pregnancy, unspecified trimester'),
+                   ('K35.80', 'Acute appendicitis, unspecified'), ('S83.40', 'Sprain of collateral ligament of knee'),
+                   ('E11.9', 'Type 2 diabetes mellitus without complications'), ('A09', 'Infectious gastroenteritis and colitis'),
+                   ('E86.0', 'Dehydration'), ('S52.40', 'Fracture of shafts of both ulna and radius'),
+                   ('M54.16', 'Radiculopathy, lumbar region'), ('I44.2', 'Atrioventricular block, complete'),
+                   ('R00.1', 'Bradycardia, unspecified'), ('A90', 'Dengue fever'), ('D69.6', 'Thrombocytopenia, unspecified'),
+                   ('O82', 'Encounter for caesarean delivery without indication')]:
+    ICD[code] = (goc('icd_' + code.replace('.', '_'), 'icd10_codes', {'icd_code': code}, {'icd_description': desc, 'group_id': 0}), desc)
+
+# ---------------------------------------------------------------------------
 section('STAFF (login: email below / password Demo@123)')
 STAFF = {}
 staff_rows = [
@@ -504,6 +521,56 @@ opd_visits = [
     ('suresh1', 'suresh', 'dr_bhatt', 0, '12:00', 'cons_spl', 'Chest pain and giddiness', ('164/98', '165', '68', '58', '98.2', '20'),
      'Bradycardia, ? heart block. ECG done. Shifted to ICU.', [], 'Cash'),
 ]
+# Diagnosis (ICD-10), tests advised and advice for each visit's prescription.
+# Tests match the pathology/radiology bills further down.
+opd_rx_extra = {
+    'ramesh1': (['B34.9', 'R50.9'], ['p:cbc'], 'Plenty of oral fluids and rest. Tepid sponging if temperature is above 101 F.', 5),
+    'sunanda1': (['N92.6'], ['p:tsh', 'p:cbc', 'r:usg'], 'Maintain a menstrual calendar. Bring TSH and USG reports on review.', 7),
+    'arjun1': (['J06.9'], [], 'Steam inhalation twice daily, warm fluids. Return if breathing becomes fast or fever persists beyond 3 days.', 3),
+    'vinod1': (['I50.9', 'I10', 'E78.5'], ['p:lipid', 'p:kft', 'r:xray', 'r:ecg'], 'Salt below 5 g/day, fluids below 1.5 L/day. Weigh daily; report gain over 2 kg in 3 days.', 14),
+    'farzana1': (['Z34.90'], ['p:cbc'], 'Count foetal movements daily. Report bleeding, leaking or reduced movements immediately.', 14),
+    'ganesh1': (['K35.80'], ['p:cbc', 'p:urine', 'r:usg'], 'Nil by mouth. Admitted for surgical management.', None),
+    'kunal1': (['S83.40'], [], 'Rest, ice packs 20 min 3-4 times a day, knee brace, leg elevation. Avoid sports for 3 weeks.', 7),
+    'anjali1': (['J02.9'], [], 'Warm saline gargles 3-4 times a day. Avoid cold drinks.', 3),
+    'shabana1': (['E11.9'], ['p:hba1c', 'p:kft', 'p:lipid'], 'Diabetic diet, avoid sugar and sweets. Walk 30 minutes daily. Check fasting sugar weekly.', 7),
+    'aarav1': (['A09', 'E86.0'], [], 'ORS after every loose stool, continue breastfeeding and light diet. Return if drowsy or not passing urine.', 2),
+    'imran1': (['S52.40'], ['r:xray'], 'Arm sling, keep limb elevated. Admitted for ORIF.', None),
+    'ramesh2': (['B34.9'], [], 'Fever has settled. Resume normal diet and activity.', None),
+    'rekha1': (['M54.16'], ['p:cbc'], 'Avoid forward bending and lifting weights. Firm mattress. Start physiotherapy.', 10),
+    'suresh1': (['I44.2', 'R00.1'], ['r:ecg', 'r:ct'], 'Shifted to ICU for cardiac monitoring and temporary pacing.', None),
+}
+opd_rx_extra_meds = {
+    'ganesh1': [('ceftri', '1vial', 'bd', '5d', 'IV, after test dose'), ('pantoinj', '1vial', 'od', '5d', 'IV')],
+    'imran1': [('para', '1tab', 'tds', '5d', 'After food'), ('pan', '1tab', 'od', '5d', 'Before breakfast')],
+    'suresh1': [('eco', '1tab', 'od', '1m', 'After lunch')],
+}
+
+
+def prescription(visit_id, ipd_id, days_ago, doctor, complaints, vitals, dx_codes, tests, meds, advice, followup_days, extra_finding=''):
+    """One prescription with diagnosis, medicines, tests advised, advice and follow-up."""
+    bp, pulse, temp, resp = vitals
+    header = (f'<p><b>Chief complaints:</b> {complaints}</p>'
+              f'<p><b>Vitals:</b> BP {bp} mmHg, Pulse {pulse}/min, Temp {temp} F, RR {resp}/min</p>')
+    diagnosis = '; '.join(f'{c} {ICD[c][1]}' for c in dx_codes)
+    finding = f'Diagnosis: {diagnosis}' + (f'\nFindings: {extra_finding}' if extra_finding else '')
+    footer = q(f'<p><b>Advice:</b> {advice}</p>')
+    if followup_days:
+        footer = R(f"CONCAT({footer}, '<p><b>Follow-up:</b> ', DATE_FORMAT({day(days_ago - followup_days)}, '%d %b %Y'), ' or earlier if needed.</p>')")
+    bid = nid('ipd_prescription_basic')
+    ins('ipd_prescription_basic', {'id': bid, 'ipd_id': ipd_id, 'visit_details_id': visit_id, 'attachment': '', 'attachment_name': '',
+                                   'header_note': header, 'footer_note': footer, 'finding_description': finding,
+                                   'is_finding_print': 'yes', 'date': day(days_ago), 'generated_by': S[doctor], 'prescribe_by': S[doctor]})
+    for med, dose, iv, du, instr in meds:
+        ins('ipd_prescription_details', {'id': nid('ipd_prescription_details'), 'basic_id': bid, 'pharmacy_id': MED[med],
+                                         'dosage': DOSE[dose], 'dose_interval_id': INTV[iv], 'dose_duration_id': DUR[du], 'instruction': instr})
+    for t in tests:
+        kind, key = t.split(':')
+        ins('ipd_prescription_test', {'id': nid('ipd_prescription_test'), 'ipd_prescription_basic_id': bid,
+                                      'pathology_id': PTEST[key][0] if kind == 'p' else None,
+                                      'radiology_id': RTEST[key][0] if kind == 'r' else None, 'created_at': dt(days_ago, '12:00')})
+    return bid
+
+
 for k, pat, doc, d, hm, ch, sym, (bp, ht, wt, pulse, temp, resp), note, rx, mode in opd_visits:
     if k.endswith('1'):
         case = new_case()
@@ -525,14 +592,11 @@ for k, pat, doc, d, hm, ch, sym, (bp, ht, wt, pulse, temp, resp), note, rx, mode
                           'pulse': pulse, 'temperature': temp, 'respiration': resp, 'known_allergies': '', 'patient_old': 'yes' if k.endswith('2') else '',
                           'casualty': 'no', 'refference': '', 'date': day(d), 'note': note, 'payment_mode': mode,
                           'generated_by': S['recep_sneha'], 'live_consult': 'no', 'is_antenatal': 1 if pat == 'farzana' else 0, 'can_delete': 'yes'})
-    if rx:
-        bid = nid('ipd_prescription_basic')
-        ins('ipd_prescription_basic', {'id': bid, 'ipd_id': None, 'visit_details_id': vid, 'attachment': '', 'attachment_name': '',
-                                       'header_note': f'<p>Complaints: {sym}</p>', 'footer_note': '<p>Review after 5 days or earlier if needed.</p>',
-                                       'finding_description': note, 'is_finding_print': 'yes', 'date': day(d), 'generated_by': S[doc], 'prescribe_by': S[doc]})
-        for med, dose, iv, du, instr in rx:
-            ins('ipd_prescription_details', {'id': nid('ipd_prescription_details'), 'basic_id': bid, 'pharmacy_id': MED[med],
-                                             'dosage': DOSE[dose], 'dose_interval_id': INTV[iv], 'dose_duration_id': DUR[du], 'instruction': instr})
+    dx, tests, advice, fu = opd_rx_extra[k]
+    if k.endswith('1'):
+        for code in dx:
+            ins('opd_icd10_codes', {'id': nid('opd_icd10_codes'), 'opd_id': oid, 'icd_code_id': ICD[code][0]})
+    prescription(vid, None, d, doc, sym, (bp, pulse, temp, resp), dx, tests, rx + opd_rx_extra_meds.get(k, []), advice, fu, note)
 
 # ---------------------------------------------------------------------------
 section('IPD: admissions, beds, charges, notes, discharge')
@@ -552,6 +616,20 @@ admissions = [
     ('kalpana', 'kalpana', 'dr_desai', 'FW-01', 2, None, 'room_gen', 'Dengue fever with thrombocytopenia (platelets 62,000)',
      ('104/68', '157', '54', '108', '102.2', '22'), None, '30000', False),
 ]
+# Diagnoses for every admission; inpatient medicine orders and tests for current admissions.
+ipd_rx = {
+    'ganesh': (['K35.80'], [('ceftri', '1vial', 'bd', '5d', 'IV'), ('pantoinj', '1vial', 'od', '5d', 'IV'), ('para', '1tab', 'sos', '3d', 'If pain or fever')],
+               ['p:cbc'], 'Post-op: sips of water after 6 hours, soft diet from day 2. Ambulate early.'),
+    'imran': (['S52.40'], [('ceftri', '1vial', 'bd', '3d', 'IV'), ('para', '1tab', 'tds', '5d', 'After food'), ('pan', '1tab', 'od', '5d', 'Before breakfast')],
+              ['r:xray'], 'Limb elevation, finger movements every hour. Check-dress on day 2.'),
+    'suresh': (['I44.2', 'R00.1', 'I10'], [('eco', '1tab', 'od', '1m', 'After lunch'), ('atorva', '1tab', 'hs', '1m', '')],
+               ['p:kft', 'r:ecg'], 'Continuous cardiac monitoring. Strict bed rest. Keep atropine ready.'),
+    'priyanka': (['O82'], [], [], ''),
+    'vinod': (['I50.9', 'I10'], [], [], ''),
+    'kalpana': (['A90', 'D69.6'], [('para', '1tab', 'tds', '5d', 'Avoid other painkillers'), ('ors', '10ml', 'qid', '5d', 'Plenty of oral fluids'),
+                                   ('pantoinj', '1vial', 'od', '3d', 'IV')],
+                ['p:cbc', 'p:lft'], 'Platelet count every 12 hours. Watch for bleeding gums, black stools or abdominal pain.'),
+}
 for k, pat, doc, bed, d_in, d_out, room, sym, (bp, ht, wt, pulse, temp, resp), org, credit, from_opd in admissions:
     case = OPD[pat][1] if from_opd else new_case()
     if from_opd:
@@ -571,6 +649,11 @@ for k, pat, doc, bed, d_in, d_out, room, sym, (bp, ht, wt, pulse, temp, resp), o
     if d_out is None:
         emit(f"UPDATE patients SET is_ipd = 'yes' WHERE id = {P[pat]};")
     ins('ipd_doctors', {'id': nid('ipd_doctors'), 'ipd_id': iid, 'consult_doctor': S[doc]})
+    dx, ipd_meds, ipd_tests, ipd_advice = ipd_rx[k]
+    for code in dx:
+        ins('ipd_icd10_codes', {'id': nid('ipd_icd10_codes'), 'ipd_id': iid, 'icd_code_id': ICD[code][0]})
+    if ipd_meds:
+        prescription(None, iid, d_in, doc, sym, (bp, pulse, temp, resp), dx, ipd_tests, ipd_meds, ipd_advice, None)
     days = max((d_in - (d_out if d_out is not None else 0)), 1)
     total = 0
     for chk, qty in [(room, days), ('nursing', days), ('doc_visit', days)] + ([('dressing', 1)] if k in ('ganesh', 'imran') else []):
@@ -991,7 +1074,7 @@ emit('--')
 emit('-- What it creates (dates are relative to the day you run it, so dashboards look current):')
 emit('--   Staff (14, all roles)  login: <first>.<last>@example.com / Demo@123  e.g. anil.deshpande@example.com (doctor)')
 emit('--   Patients (19)          patient panel: pat7001 .. pat7019 / demo123')
-emit('--   Appointments, OPD visits + prescriptions, IPD admissions (current + discharged) with beds, charges,')
+emit('--   Appointments, OPD visits with full prescriptions (ICD-10 diagnosis, medicines, tests, advice, follow-up), IPD admissions (current + discharged) with beds, charges,')
 emit('--   nurse notes, consultant instructions, discharge cards, operation theatre, birth/death records,')
 emit('--   pharmacy purchases/stock/sales, pathology + radiology bills with reports, blood bank donors/components/issues,')
 emit('--   ambulance, front office (visitors, calls, complaints, postal), income/expenses, inventory, attendance,')
