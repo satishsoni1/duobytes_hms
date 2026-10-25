@@ -542,6 +542,82 @@ class Printing extends Admin_Controller
         $this->load->view('layout/footer');
     }
     
+    // Privilege that lets a user edit each print type's header (same as its settings page).
+    private $header_privileges = array(
+        'appointment'           => 'print_appointment_header_footer',
+        'opdpre'                => 'opd_prescription_print_header_footer',
+        'opd'                   => 'opd_bill_print_header_footer',
+        'ipdpres'               => 'ipd_prescription_print_header_footer',
+        'ipd'                   => 'ipd_bill_print_header_footer',
+        'bill'                  => 'ipd_bill_print_header_footer',
+        'pharmacy'              => 'pharmacy_bill_print_header_footer',
+        'payslip'               => 'print_payslip_header_footer',
+        'paymentreceipt'        => 'payment_receipt_header_footer',
+        'birth'                 => 'birth_print_header_footer',
+        'death'                 => 'death_print_header_footer',
+        'pathology'             => 'pathology_print_header_footer',
+        'radiology'             => 'radiology_print_header_footer',
+        'ot'                    => 'ot_print_header_footer',
+        'bloodbank'             => 'bloodbank_print_header_footer',
+        'ambulance'             => 'ambulance_print_header_footer',
+        'discharge_card'        => 'discharge_summary_print_header_footer',
+        'obstetric_history'     => 'ipd_obstetric_history_print_header_footer',
+        'opd_antenatal_finding' => 'opd_antenatal_finding_print_header_footer',
+        'ipd_antenatal_finding' => 'ipd_antenatal_finding_print_header_footer',
+    );
+
+    /**
+     * Rebuilds every print header image the user may edit from the hospital name,
+     * address, phone and email in General Settings. The first time a header is
+     * replaced, the old image is kept in uploads/printing/backup/.
+     */
+    public function generateheaders()
+    {
+        $back = (string) $this->input->post('back', TRUE);
+        if (!preg_match('#^admin/printing(/[a-z_]+)?$#', $back)) {
+            $back = 'admin/printing/index';
+        }
+        if ($this->input->method() !== 'post') {
+            redirect($back);
+        }
+
+        $this->load->library('print_header_generator');
+        $hospital   = $this->setting_model->getHospitalDetail();
+        $dir        = FCPATH . 'uploads/printing/';
+        $backup_dir = $dir . 'backup/';
+        if (!is_dir($backup_dir)) {
+            @mkdir($backup_dir, 0755, true);
+        }
+
+        $done = 0;
+        foreach ($this->db->get('print_setting')->result_array() as $row) {
+            $privilege = isset($this->header_privileges[$row['setting_for']]) ? $this->header_privileges[$row['setting_for']] : null;
+            if (!$privilege || !$this->rbac->hasPrivilege($privilege, 'can_edit')) {
+                continue;
+            }
+
+            $relative = 'uploads/printing/' . $row['id'] . '.jpg';
+            $target   = FCPATH . $relative;
+            if (is_file($target) && !is_file($backup_dir . $row['id'] . '.jpg')) {
+                @copy($target, $backup_dir . $row['id'] . '.jpg');
+            }
+
+            if ($this->print_header_generator->save($hospital, $row['setting_for'], $target)) {
+                if ($row['print_header'] !== $relative) {
+                    $this->db->where('id', $row['id'])->update('print_setting', array('print_header' => $relative));
+                }
+                $done++;
+            }
+        }
+
+        if ($done > 0) {
+            $this->session->set_flashdata('success', $done . ' print headers generated for ' . $hospital->name . '.');
+        } else {
+            $this->session->set_flashdata('error', 'No print headers were generated. Check your print header permissions and that uploads/printing/ is writable.');
+        }
+        redirect($back);
+    }
+
     public function index()
     {
         if (!$this->rbac->hasPrivilege('print_appointment_header_footer', 'can_view')) {

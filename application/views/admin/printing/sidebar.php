@@ -1,5 +1,12 @@
 <div class="card border0">
-    <ul class="tablists">        
+    <form method="post" action="<?php echo site_url('admin/printing/generateheaders'); ?>" class="mb10"
+          onsubmit="return confirm('Replace the print header images with new ones built from the hospital name, address, phone and email in General Settings? The current images are kept in uploads/printing/backup/.');">
+        <input type="hidden" name="back" value="<?php echo html_escape($this->uri->uri_string()); ?>">
+        <button type="submit" class="btn btn-primary btn-sm btn-block" title="Uses the hospital name, address, phone and email from General Settings">
+            <i class="fa fa-magic"></i> Generate headers from hospital settings
+        </button>
+    </form>
+    <ul class="tablists">
         
         <?php if ($this->rbac->hasPrivilege('print_appointment_header_footer', 'can_view')) { ?>
         
