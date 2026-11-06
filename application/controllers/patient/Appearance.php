@@ -31,7 +31,7 @@ class Appearance extends Patient_Controller
             return;
         }
 
-        $this->form_validation->set_rules('theme_preset', 'Theme',     'trim|required|xss_clean|in_list[clinical,slate,midnight,oled,nightshift]');
+        $this->form_validation->set_rules('theme_preset', 'Theme',     'trim|required|xss_clean|in_list[skylark,clinical,slate,midnight,oled,nightshift]');
         $this->form_validation->set_rules('text_size',    'Text size', 'trim|required|xss_clean|in_list[compact,normal,comfort,large]');
         $this->form_validation->set_rules('density',      'Density',   'trim|required|xss_clean|in_list[compact,comfortable,spacious]');
 

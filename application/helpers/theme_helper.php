@@ -128,6 +128,19 @@ if (!function_exists('theme_full_palette')) {
                 '--rail' => '#FFFFFF', '--rail-ink' => '#64748B', '--rail-ink-active' => '#0F172A',
                 '--topbar' => '#FFFFFF', '--topbar-ink' => '#0F172A',
             ],
+            // Skylark Hospital, Akola — brand teal (brochure / building signage) with the
+            // logo's blue as a secondary and a lime highlight used by the brand stripe.
+            'skylark' => [
+                '--bg' => '#F3F8F8', '--surface' => '#FFFFFF', '--surface-2' => '#EAF3F3', '--surface-3' => '#D6E7E7',
+                '--ink' => '#0E2A2C', '--ink-2' => '#2B4749',
+                '--muted' => '#56706F', '--faint' => '#8CA3A3',
+                '--border' => '#DAE7E7', '--border-light' => '#EDF5F5', '--border-strong' => '#BCD2D2',
+                '--accent' => '#1A7A7E', '--accent-ink' => '#FFFFFF', '--accent-soft' => '#DCEFEE', '--accent-dark' => '#135E61',
+                '--link' => '#1A7A7E', '--link-2' => '#1E5AA8',
+                '--rowhover' => '#EEF6F6',
+                '--rail' => '#FFFFFF', '--rail-ink' => '#56706F', '--rail-ink-active' => '#0E2A2C',
+                '--topbar' => '#FFFFFF', '--topbar-ink' => '#0E2A2C',
+            ],
             'slate' => [
                 '--bg' => '#F1F5F9', '--surface' => '#FFFFFF', '--surface-2' => '#E2E8F0', '--surface-3' => '#CBD5E1',
                 '--ink' => '#1E293B', '--ink-2' => '#334155',
@@ -183,6 +196,7 @@ if (!function_exists('theme_preset_to_variant')) {
      * that provides the base bg/surface/ink palette.
      *
      *   clinical    -> a (light, teal accent default)
+     *   skylark     -> a (light, Skylark Hospital brand teal)
      *   slate       -> a (light, slate accent default)
      *   nightshift  -> a (light, sepia accent default)
      *   midnight    -> b (dark)
@@ -194,6 +208,7 @@ if (!function_exists('theme_preset_to_variant')) {
     {
         $map = [
             'clinical'   => 'a',
+            'skylark'    => 'a',
             'slate'      => 'a',
             'nightshift' => 'a',
             'midnight'   => 'b',
@@ -419,5 +434,23 @@ if (!function_exists('front_theme_primary_hex')) {
         }
 
         return $fallback;
+    }
+}
+
+if (!function_exists('hospital_brand')) {
+    /**
+     * Brand Kit row (Setup > Settings > Brand Kit), cached per request.
+     * Use this from views: inside a CI view `$this` is the loader, so a model
+     * loaded there is not reachable as $this->model.
+     */
+    function hospital_brand()
+    {
+        static $brand = null;
+        if ($brand === null) {
+            $CI =& get_instance();
+            $CI->load->model('hospital_brand_model');
+            $brand = $CI->hospital_brand_model->get();
+        }
+        return $brand;
     }
 }

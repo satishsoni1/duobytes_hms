@@ -74,7 +74,7 @@ function bb_class($u) { if ($u <= 3) return 'low'; if ($u <= 5) return 'warn'; r
     <?php if ($mysqlVersion && $sqlMode && strpos($sqlMode->mode, 'ONLY_FULL_GROUP_BY') !== FALSE) { ?>
         <div class="sh-alert danger alert alert-dismissible fade show" role="alert">
             <span class="ic"><i class="fa fa-database"></i></span>
-            <span class="txt">Smart Hospital may not work properly because ONLY_FULL_GROUP_BY is enabled, consult with your hosting provider to disable ONLY_FULL_GROUP_BY in sql_mode configuration.</span>
+            <span class="txt">The application may not work properly because ONLY_FULL_GROUP_BY is enabled, consult with your hosting provider to disable ONLY_FULL_GROUP_BY in sql_mode configuration.</span>
             <button type="button" class="x" data-bs-dismiss="alert" aria-label="Close"><i class="fa fa-times"></i></button>
         </div>
     <?php } ?>
@@ -99,6 +99,33 @@ function bb_class($u) { if ($u <= 3) return 'low'; if ($u <= 5) return 'warn'; r
     }
     ?>
 </div>
+
+<?php
+// ═══════════ Brand Kit welcome banner (Setup > Settings > Brand Kit) ═══════════
+$sk_brand = hospital_brand();
+if (!empty($sk_brand['show_dashboard_banner'])):
+    $sk_admin = $this->session->userdata('hospitaladmin');
+    $sk_hour  = (int) date('G');
+    $sk_greet = $sk_hour < 12 ? 'Good morning' : ($sk_hour < 17 ? 'Good afternoon' : 'Good evening');
+    $sk_first = trim(strtok((string) ($sk_admin['username'] ?? ''), ' '));
+    $sk_logo  = $this->customlib->getLogoImage();
+    $sk_name  = $this->customlib->getAppName();
+?>
+<div class="sk-banner sk-showcase sk-rise">
+    <?php if (!empty($sk_logo['mini_logo'])): ?><img class="sk-show-logo" src="<?php echo $this->media_storage->getImageURL('uploads/hospital_content/logo/' . $sk_logo['mini_logo']); ?>" alt=""><?php endif; ?>
+    <div class="sk-banner-text">
+        <div class="sk-banner-greet"><?php echo $sk_greet . ($sk_first !== '' ? ', ' . html_escape($sk_first) : ''); ?></div>
+        <div class="sk-banner-sub"><?php echo html_escape($sk_brand['welcome_message'] !== '' ? $sk_brand['welcome_message'] : $sk_name); ?></div>
+    </div>
+    <div class="sk-banner-meta">
+        <?php if ($sk_brand['hours_text'] !== ''): ?><span class="sk-pill"><span class="sk-pulse" aria-hidden="true"></span><?php echo html_escape($sk_brand['hours_text']); ?></span><?php endif; ?>
+        <span class="sk-pill"><?php echo date('l, d M Y'); ?></span>
+        <?php if (!empty($sk_brand['inauguration_enabled']) && $this->rbac->hasPrivilege('theme_studio', 'can_view')): ?>
+        <a class="sk-pill sk-inaug-btn" href="<?php echo base_url('admin/inauguration'); ?>" target="_blank" rel="noopener"><i class="fa fa-star"></i> <?php echo empty($sk_brand['inaugurated_at']) ? 'Inaugurate portal' : 'Inauguration'; ?></a>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- ═══════════ Page header ═══════════ -->
 <div class="dash-page-head">

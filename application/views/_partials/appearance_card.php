@@ -28,6 +28,7 @@ $hospital_default_preset = $hospital_theme['theme_preset'] ?? 'clinical';
 <div class="sh-app-preset-grid" id="shPresetGrid">
   <?php
     $preset_meta = [
+      'skylark'    => ['name' => 'Skylark',                                'sub' => 'Hospital brand · Teal', 'btn' => 'Save', 'b1' => 'Active',   'b2' => 'Pending', 'b3' => 'Critical'],
       'clinical'   => ['name' => $this->lang->line('preset_clinical'),   'sub' => 'Light · Teal',         'btn' => 'Save', 'b1' => 'Active',   'b2' => 'Pending', 'b3' => 'Critical'],
       'slate'      => ['name' => $this->lang->line('preset_slate'),      'sub' => 'Light · Indigo',       'btn' => 'Save', 'b1' => 'Active',   'b2' => 'Pending', 'b3' => 'Overdue'],
       'midnight'   => ['name' => $this->lang->line('preset_midnight'),   'sub' => 'Dark · Easy on eyes',  'btn' => 'View', 'b1' => 'Stable',   'b2' => 'Watch',   'b3' => 'Critical'],
@@ -99,6 +100,7 @@ $hospital_default_preset = $hospital_theme['theme_preset'] ?? 'clinical';
 <script>
 (function(){
   const PRESETS = {
+    skylark:    <?= json_encode(theme_full_palette('skylark')) ?>,
     clinical:   <?= json_encode(theme_full_palette('clinical')) ?>,
     slate:      <?= json_encode(theme_full_palette('slate')) ?>,
     midnight:   <?= json_encode(theme_full_palette('midnight')) ?>,

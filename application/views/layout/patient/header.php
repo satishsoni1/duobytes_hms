@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><?php echo $this->customlib->getAppName(); ?> · Smart Hospital</title>
+  <title><?php echo htmlspecialchars((string) $this->customlib->getAppName()); ?> · Patient Portal</title>
   <meta name="robots" content="noindex, nofollow">
 
   <!-- Fonts: Inter + Roboto + Nunito (Theme Studio font-family choices) -->
@@ -59,6 +59,7 @@
 
   <!-- 11. SH Theme — MUST load AFTER all plugin CSS so overrides win -->
   <link href="<?php echo base_url('backend/css/sh-theme.css'); ?>?v=<?php echo filemtime(FCPATH.'backend/css/sh-theme.css'); ?>" rel="stylesheet">
+  <link href="<?php echo base_url('backend/css/sh-brand.css'); ?>?v=<?php echo filemtime(FCPATH.'backend/css/sh-brand.css'); ?>" rel="stylesheet">
 
   <!-- 12. SH Patient RTL overrides — loaded LAST when RTL is active so all RTL rules win -->
   <?php if (!empty($rtl_mode)): ?>

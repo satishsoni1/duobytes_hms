@@ -9,3 +9,6 @@ application/config/development/
 
 # Per-server settings and secrets
 .env
+
+# Generated production DB (contains admin password hash + cron key) — rebuild with tools/build_production_db.py
+SKYLARK_PRODUCTION_DB.sql

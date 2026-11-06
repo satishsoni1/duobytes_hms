@@ -583,6 +583,11 @@ class Printing extends Admin_Controller
 
         $this->load->library('print_header_generator');
         $hospital   = $this->setting_model->getHospitalDetail();
+        $theme      = $this->hospital_theme_settings_model->get();
+        $this->load->model('hospital_brand_model');
+        $brand                 = $this->hospital_brand_model->get();
+        $hospital->brand_color = isset($theme['primary_color']) ? $theme['primary_color'] : '';
+        $hospital->tagline     = $brand['tagline'];
         $dir        = FCPATH . 'uploads/printing/';
         $backup_dir = $dir . 'backup/';
         if (!is_dir($backup_dir)) {

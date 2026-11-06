@@ -12,6 +12,7 @@
 
 			<?php if($this->rbac->hasPrivilege('theme_studio', 'can_view')) { ?>
                 <li><a class="<?php echo set_Innermenu('admin/themestudio'); ?>" href="<?php echo base_url(); ?>admin/themestudio"><?php echo $this->lang->line('theme_studio'); ?></a></li>
+                <li><a class="<?php echo set_Innermenu('admin/brandkit'); ?>" href="<?php echo base_url(); ?>admin/brandkit">Brand Kit</a></li>
             <?php } ?>
 
             <div class="tablists-divider"></div>

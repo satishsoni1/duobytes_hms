@@ -3,13 +3,15 @@ $titleresult = $this->customlib->getTitleName();
 $logoresult  = $this->customlib->getLogoImage();
 $title_name  = !empty($titleresult["name"]) ? $titleresult["name"] : "Hospital Name";
 $mini_logo   = !empty($logoresult["mini_logo"]) ? "uploads/hospital_content/logo/" . $logoresult["mini_logo"] : "";
+$sk_brand    = hospital_brand();
+$sk_on       = !empty($sk_brand['show_login_showcase']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?php echo $title_name; ?></title>
+<title><?php echo html_escape($title_name); ?> · Patient Login</title>
 <link rel="shortcut icon" href="<?php echo base_url() . "uploads/hospital_content/logo/" . $logoresult["mini_logo"]; ?>" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,6 +19,7 @@ $mini_logo   = !empty($logoresult["mini_logo"]) ? "uploads/hospital_content/logo
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="<?php echo base_url(); ?>backend/css/sh-tokens.css">
 <link rel="stylesheet" href="<?php echo base_url(); ?>backend/css/sh-login.css">
+<link rel="stylesheet" href="<?php echo base_url(); ?>backend/css/sh-brand.css?v=<?php echo @filemtime(FCPATH.'backend/css/sh-brand.css'); ?>">
 <?php if (isset($sh_theme_tokens)) { echo theme_render_style_block($sh_theme_tokens); } ?>
 </head>
 <body class="variant-<?php echo isset($sh_theme_tokens) ? theme_preset_to_variant($sh_theme_tokens['theme_preset']) : (isset($sh_variant) ? htmlspecialchars($sh_variant) : 'a'); ?>" data-preset="<?php echo isset($sh_theme_tokens) ? htmlspecialchars($sh_theme_tokens['theme_preset']) : 'clinical'; ?>">
@@ -25,8 +28,9 @@ $mini_logo   = !empty($logoresult["mini_logo"]) ? "uploads/hospital_content/logo
 <div class="lp-wrap patient-layout">
 
   <!-- RIGHT: Brand / pitch / news (rendered second, appears right in patient-layout) -->
-  <div class="lp-brand patient">
+  <div class="lp-brand patient<?php echo $sk_on ? ' sk-showcase' : ''; ?>">
 
+    <?php if ($sk_on): $this->load->view('_partials/brand_showcase', array('brand' => $sk_brand, 'portal' => 'Patient Portal')); else: ?>
     <div class="lp-logo-row">
       <div class="lp-logo-mark">
         <?php if (!empty($mini_logo)): ?>
@@ -38,8 +42,10 @@ $mini_logo   = !empty($logoresult["mini_logo"]) ? "uploads/hospital_content/logo
       <div class="lp-logo-name"><?php echo html_escape($title_name); ?></div>
     </div>
 
+    <?php endif; ?>
+
     <div class="lp-pitch">
-      <div class="lp-badge"><span class="dot"></span><?php echo $this->lang->line('patient_portal') ?: 'Patient Portal'; ?></div>
+      <?php if (!$sk_on): ?><div class="lp-badge"><span class="dot"></span><?php echo $this->lang->line('patient_portal') ?: 'Patient Portal'; ?></div><?php endif; ?>
 
       <?php if (!empty($notice)): ?>
         <div class="lp-news">
@@ -79,6 +85,12 @@ $mini_logo   = !empty($logoresult["mini_logo"]) ? "uploads/hospital_content/logo
   <!-- LEFT (via order:-1): Login form -->
   <div class="lp-form-panel">
     <div class="lp-card">
+      <?php if ($sk_on): ?>
+      <div class="sk-form-brand sk-mobile-only">
+        <?php if (!empty($mini_logo)): ?><img src="<?php echo $this->media_storage->getImageURL($mini_logo); ?>" alt=""><?php endif; ?>
+        <div><div class="n"><?php echo html_escape($title_name); ?></div><div class="t"><?php echo html_escape($sk_brand['tagline']); ?></div></div>
+      </div>
+      <?php endif; ?>
       <h2><?php echo $this->lang->line('user_login'); ?></h2>
 
       <?php if (isset($error_message)): ?>

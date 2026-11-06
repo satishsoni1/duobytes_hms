@@ -36,6 +36,7 @@ $density        = $ht['density']       ?? 'comfortable';
         <div class="ts-preset-grid" id="tsPresetGrid">
           <?php
             $preset_meta = [
+              'skylark'    => ['name' => 'Skylark',                                'sub' => 'Hospital brand · Teal', 'btn' => 'Admit',   'b1' => 'Active',   'b2' => 'Pending', 'b3' => 'Critical'],
               'clinical'   => ['name' => $this->lang->line('preset_clinical'),   'sub' => 'Default · Light teal',  'btn' => 'Save',    'b1' => 'Active',   'b2' => 'Pending', 'b3' => 'Critical'],
               'slate'      => ['name' => $this->lang->line('preset_slate'),      'sub' => 'Light · Indigo',        'btn' => 'Save',    'b1' => 'Active',   'b2' => 'Pending', 'b3' => 'Overdue'],
               'midnight'   => ['name' => $this->lang->line('preset_midnight'),   'sub' => 'Dark · ICU low-light',  'btn' => 'Examine', 'b1' => 'Stable',   'b2' => 'Watch',   'b3' => 'Critical'],
@@ -176,6 +177,7 @@ $density        = $ht['density']       ?? 'comfortable';
   // ===== Preset token bundles — sourced from theme_full_palette() in PHP
   //       so live preview and server-side emission stay in lockstep.
   const PRESETS = {
+    skylark:    <?= json_encode(theme_full_palette('skylark')) ?>,
     clinical:   <?= json_encode(theme_full_palette('clinical')) ?>,
     slate:      <?= json_encode(theme_full_palette('slate')) ?>,
     midnight:   <?= json_encode(theme_full_palette('midnight')) ?>,
@@ -266,7 +268,7 @@ $density        = $ht['density']       ?? 'comfortable';
   // color-scheme is a real property, NOT a --token, so inline body vars can't override
   // it — the class MUST be swapped or a dark→light switch leaves color-scheme:dark stuck,
   // rendering native widgets/text white on the now-light card ("blank" until Save reloads).
-  const PRESET_VARIANT = { clinical:'a', slate:'a', nightshift:'a', midnight:'b', oled:'b' };
+  const PRESET_VARIANT = { skylark:'a', clinical:'a', slate:'a', nightshift:'a', midnight:'b', oled:'b' };
 
   function applyPreset(presetName, target) {
     const bundle = PRESETS[presetName]; if (!bundle) return;

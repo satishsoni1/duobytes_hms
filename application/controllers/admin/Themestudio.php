@@ -38,7 +38,7 @@ class Themestudio extends Admin_Controller
             return;
         }
 
-        $this->form_validation->set_rules('theme_preset',  'Theme',        'trim|required|xss_clean|in_list[clinical,slate,midnight,oled,nightshift]');
+        $this->form_validation->set_rules('theme_preset',  'Theme',        'trim|required|xss_clean|in_list[skylark,clinical,slate,midnight,oled,nightshift]');
         $this->form_validation->set_rules('primary_color', 'Primary color','trim|required|xss_clean|regex_match[/^#[0-9A-Fa-f]{6}$/]');
         $this->form_validation->set_rules('font_color',    'Font color',   'trim|required|xss_clean|regex_match[/^#[0-9A-Fa-f]{6}$/]');
         $this->form_validation->set_rules('font_family',   'Font',         'trim|required|xss_clean|in_list[Inter,Roboto,Nunito]');

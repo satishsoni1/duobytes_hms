@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><?php echo isset($title) ? htmlspecialchars($title) : $this->customlib->getAppName(); ?> · Smart Hospital</title>
+  <title><?php echo isset($title) ? htmlspecialchars($title) . ' · ' : ''; ?><?php echo htmlspecialchars((string) $this->customlib->getAppName()); ?></title>
   <meta name="robots" content="noindex, nofollow">
 
   <!-- Fonts: Inter + Roboto + Nunito (Theme Studio font-family choices) + JetBrains Mono -->
@@ -63,6 +63,7 @@
 
   <!-- 3. SH Theme (layout shell + BS5 overrides + custom components) — MUST load AFTER all plugin CSS so our overrides win -->
   <link href="<?php echo base_url('backend/css/sh-theme.css'); ?>?v=<?php echo filemtime(FCPATH.'backend/css/sh-theme.css'); ?>" rel="stylesheet">
+  <link href="<?php echo base_url('backend/css/sh-brand.css'); ?>?v=<?php echo filemtime(FCPATH.'backend/css/sh-brand.css'); ?>" rel="stylesheet">
 
   <!-- 3b. SH Dashboard styles — loaded ONLY on admin/admin/dashboard page (Variant B layout) -->
   <?php if (isset($module) && $module === 'dashboard'): ?>

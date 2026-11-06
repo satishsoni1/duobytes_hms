@@ -65,7 +65,9 @@ class Print_header_generator
         $ink   = imagecolorallocate($img, 20, 24, 31);
         $muted = imagecolorallocate($img, 70, 78, 90);
         $brand = imagecolorallocate($img, 196, 30, 58);
-        $bar   = imagecolorallocate($img, 11, 52, 120); // logo navy
+        // Bar follows the hospital's Theme Studio primary colour (falls back to navy).
+        $rgb   = $this->hex_rgb(isset($hospital->brand_color) ? $hospital->brand_color : '') ?: array(11, 52, 120);
+        $bar   = imagecolorallocate($img, $rgb[0], $rgb[1], $rgb[2]);
         imagefill($img, 0, 0, $white);
 
         $top_h = self::HEIGHT - self::BAR_H;
@@ -127,10 +129,19 @@ class Print_header_generator
             $name_lines = $this->split_in_two($name);
             $name_sz    = $this->fit($name_lines, $max_w, 60);
         }
+        $tagline  = isset($hospital->tagline) ? trim((string) $hospital->tagline) : '';
+        $tag_sz   = 28;
+        while ($tagline !== '' && $tag_sz > 18 && $this->width($tagline, $this->font_medium, $tag_sz) > $max_w) {
+            $tag_sz -= 2;
+        }
+        $tag_h    = $tagline !== '' ? (int) ($tag_sz * 1.9) : 0;
         $line_gap = (int) ($name_sz * 1.3);
-        $base     = (int) (($top_h - $line_gap * (count($name_lines) - 1)) / 2) + (int) ($name_sz * 0.5);
+        $base     = (int) (($top_h - $line_gap * (count($name_lines) - 1) - $tag_h) / 2) + (int) ($name_sz * 0.5);
         foreach ($name_lines as $i => $text) {
             imagettftext($img, $name_sz, 0, $name_x, $base + $i * $line_gap, $ink, $this->font_bold, $text);
+        }
+        if ($tagline !== '') {
+            imagettftext($img, $tag_sz, 0, $name_x + 2, $base + (count($name_lines) - 1) * $line_gap + $tag_h, $bar, $this->font_medium, $tagline);
         }
 
         // Bottom bar with the document title, centred.
@@ -171,6 +182,15 @@ class Print_header_generator
             }
         }
         return $best;
+    }
+
+    private function hex_rgb($hex)
+    {
+        $hex = ltrim((string) $hex, '#');
+        if (!preg_match('/^[0-9a-f]{6}$/i', $hex)) {
+            return null;
+        }
+        return array(hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2)));
     }
 
     private function width($text, $font, $size)
