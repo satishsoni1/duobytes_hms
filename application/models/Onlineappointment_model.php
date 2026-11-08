@@ -216,7 +216,8 @@ class Onlineappointment_model extends MY_Model
             ->where("appointment.doctor", $doctor_id)
             ->where("date_format(appointment.date,'%Y-%m-%d')", $date)
             ->where("appointment.doctor_shift_time_id", $shift)
-            ->where("appointment.source", "Online")
+            // Mobile app bookings are slot-based like web online bookings (see Mobilebooking_model).
+            ->where_in("appointment.source", array("Online", "Mobile App"))
             ->where("is_queue", $isqueue)
             ->order_by("appointment.date")
             ->get("appointment");

@@ -21,6 +21,12 @@ $route['admin/resetpassword/(:any)']         = 'site/admin_resetpassword/$1';
 $route['admin/unauthorized']                 = 'admin/admin/unauthorized';
 $route['404_override'] = 'welcome/show_404';
 $route['translate_uri_dashes'] = false;
+
+// Staff mobile app API (mobile/staff_app). Bearer-token auth; see application/core/Mobile_api_controller.php
+$route['api/v1/auth/(:any)']     = 'api/mobile_auth/$1';
+$route['api/v1/sync/(:any)']     = 'api/mobile_sync/$1';
+$route['api/v1/patients/(:any)'] = 'api/mobile_patients/$1';
+$route['api/v1/patient/(:any)']  = 'api/mobile_patient/$1';  // patient app (own records)
 $route['form/appointment']     = 'welcome/appointment';
 $route['page/annual_calendar']     = 'welcome/annual_calendar';
 

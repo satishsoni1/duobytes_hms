@@ -36,9 +36,28 @@ class QR_Code
         // Instantiating the code QR code class
         $qrCode = new QRCode($options);
 
-        // generating the QR code image happens here
-        $qrCodeImage = $qrCode->render($data, $upload_path.$file_name.'.png');
-      
+        // generating the QR code image happens here.
+        // QRGdImage::dump() installs an error handler and does not remove it when it throws; left in place it
+        // turns CodeIgniter's own error page into a second fatal. A missing QR image must not break the page.
+        $before = self::current_error_handler();
+        try {
+            $qrCode->render($data, $upload_path . $file_name . '.png');
+            return true;
+        } catch (Throwable $e) {
+            log_message('error', 'QR code generation failed for ' . $upload_path . $file_name . '.png: ' . $e->getMessage());
+            return false;
+        } finally {
+            // Drop any handler the library left behind, back to the one active before the call.
+            for ($i = 0; $i < 5 && self::current_error_handler() !== $before; $i++) {
+                restore_error_handler();
+            }
+        }
+    }
 
+    private static function current_error_handler()
+    {
+        $h = set_error_handler(function () { return false; });
+        restore_error_handler();
+        return $h;
     }
 }

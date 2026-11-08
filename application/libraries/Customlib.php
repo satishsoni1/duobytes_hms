@@ -122,7 +122,13 @@ class Customlib
         if ($folder_path == "") {
             return null;
         }
-        return rtrim($folder_path, '/') . '/';
+        $folder_path = rtrim($folder_path, '/') . '/';
+        // A path saved on another machine (e.g. a DB copied from the live server) does not exist here,
+        // and every file write under it would fail. Use this install's root instead.
+        if (!is_dir($folder_path)) {
+            return FCPATH;
+        }
+        return $folder_path;
     }
 	
     public function getStaffFullName($firstname, $lastname, $employee_id)
