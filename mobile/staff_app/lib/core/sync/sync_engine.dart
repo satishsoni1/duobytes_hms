@@ -147,6 +147,10 @@ class SyncEngine extends StateNotifier<SyncStatus> {
       await adb.db.transaction((tx) async {
         for (final op in ops) {
           final module = _moduleFor(op.type);
+          if (module != null && !await module.isReady(tx, op)) {
+            failedThisRun.add(op.opId); // waits for an earlier op (e.g. patient registration); not an attempt
+            continue;
+          }
           final payload = module == null ? null : await module.buildPayload(tx, op);
           if (payload == null) {
             await tx.delete('outbox', where: 'seq = ?', whereArgs: [op.seq]);
@@ -154,6 +158,7 @@ class SyncEngine extends StateNotifier<SyncStatus> {
           }
           payloads.add({'op_id': op.opId, 'type': op.type, 'payload': payload});
           sent.add(op);
+          if (module!.isBarrier(op.type)) break;
         }
       });
       if (sent.isEmpty) continue;

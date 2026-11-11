@@ -7,6 +7,7 @@ import 'doctor_providers.dart';
 import '../print/print_screen.dart';
 import 'prescription_editor_screen.dart';
 import 'rx_widgets.dart';
+import 'whatsapp_actions.dart';
 
 class PrescriptionViewScreen extends ConsumerWidget {
   const PrescriptionViewScreen({super.key, required this.localId});
@@ -28,6 +29,8 @@ class PrescriptionViewScreen extends ConsumerWidget {
           appBar: AppBar(
             title: Text('Prescription ${rx.displayNo}'),
             actions: [
+              if (detail != null)
+                IconButton(tooltip: 'Send on WhatsApp', icon: const WhatsAppIcon(), onPressed: () => sendPrescriptionWhatsApp(context, ref, rx, detail.patient)),
               IconButton(tooltip: 'Print', icon: const Icon(Icons.print_rounded), onPressed: () => openPrintScreen(context, ref, rx.localId)),
               if (encounter != null && rx.status != RxStatus.conflict)
                 IconButton(

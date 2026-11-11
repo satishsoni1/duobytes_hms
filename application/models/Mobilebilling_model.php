@@ -98,7 +98,7 @@ class Mobilebilling_model extends CI_Model
     /**
      * Add a service to an OPD case (opd_details) or IPD admission. Returns the new charge row or an error string.
      */
-    public function add_charge($kind, $case_id, $charge_id, $qty, $discount, $note, $date)
+    public function add_charge($kind, $case_id, $charge_id, $qty, $discount, $note, $date, $staff_id = null)
     {
         $charge = $this->db->query("SELECT c.id, c.standard_charge, COALESCE(tc.percentage, 0) tax FROM charges c
             LEFT JOIN tax_category tc ON tc.id = c.tax_category_id WHERE c.id = ?", array((int) $charge_id))->row_array();
@@ -131,6 +131,9 @@ class Mobilebilling_model extends CI_Model
         if (!$id) {
             return null;
         }
+        // Discount approval (same rules as the web): a held-back discount is not applied.
+        $this->load->model('discountapproval_model');
+        $this->discountapproval_model->gate('charge', $id, array('requested_by' => $staff_id, 'calc' => 'mobile', 'source' => 'mobile', 'reason' => 'Added in the mobile app'));
         $c = $this->db->query("SELECT pc.id, pc.opd_id, pc.ipd_id, pc.date, ch.name charge_name, cc.name category, pc.qty, pc.standard_charge, pc.apply_charge,
                 pc.tax, pc.amount, pc.note, NULL patient_id
             FROM patient_charges pc LEFT JOIN charges ch ON ch.id = pc.charge_id LEFT JOIN charge_categories cc ON cc.id = ch.charge_category_id

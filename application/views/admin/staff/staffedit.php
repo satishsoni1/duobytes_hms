@@ -199,6 +199,8 @@
                 </div>
             </div>
 
+            <?php $this->load->view('admin/staff/_medical_registration', array('mr' => $staff)); ?>
+
             <div class="row g-3 mb-3">
                 <div class="col-md-4">
                     <label class="sh-label"><?php echo $this->lang->line('pan_number'); ?></label>

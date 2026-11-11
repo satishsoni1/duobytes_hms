@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../opd/registration_screen.dart';
+
 import '../../../core/api/api_client.dart';
 import '../../../core/providers.dart';
 import '../../../core/ui/widgets.dart';
@@ -43,6 +45,12 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
     final results = ref.watch(patientSearchProvider(_query));
     return Scaffold(
       appBar: AppBar(title: const Text('Patients'), toolbarHeight: 64),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'register',
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPatientScreen())),
+        icon: const Icon(Icons.person_add_alt_1_rounded),
+        label: const Text('Register'),
+      ),
       body: Column(children: [
         SyncBanner(onOpenDetails: widget.onOpenSyncDetails),
         Padding(

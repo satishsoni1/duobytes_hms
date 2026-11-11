@@ -16,7 +16,14 @@ class Mobileapi_model extends CI_Model
      * Keys are role names as stored in `roles`.
      */
     public static $role_modules = array(
-        'Doctor' => array('doctor'),
+        'Doctor'       => array('doctor'),
+        'Receptionist' => array('reception'),
+        'Nurse'        => array('nursing'),
+        'Pathologist'  => array('lab'),
+        'Pharmacist'   => array('pharmacy'),
+        // Small clinics often run everything from the owner's account.
+        'Admin'        => array('reception'),
+        'Super Admin'  => array('reception'),
     );
 
     const SCHEMA_VERSION = 4;

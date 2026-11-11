@@ -13,13 +13,22 @@ class Mobileclinical_model extends CI_Model
 {
     /** Writable record types and the keys allowed in their data. */
     const TYPES = array(
-        'followup'    => array('reason', 'visit_kind', 'visit_ref_id', 'done_on', 'note'),
+        'followup'    => array('reason', 'visit_kind', 'visit_ref_id', 'done_on', 'note', 'reminded_on'),
         'vaccination' => array('vaccine', 'dose', 'given_on', 'batch_no', 'site', 'note', 'external'),
         'growth'      => array('weight_kg', 'height_cm', 'head_cm', 'muac_cm', 'note'),
         // OPD queue state for a visit (waiting / with_doctor / seen / skipped), shared across the doctor's devices.
         'opd_status'  => array('state', 'visit_id', 'token', 'at'),
         'pregnancy'   => array('lmp', 'edd_usg', 'gravida', 'para', 'abortions', 'living', 'risk_factors', 'blood_group', 'outcome', 'outcome_on', 'note'),
     );
+    /**
+     * Configurable specialty forms (dental, eye, ortho, derma, physio, AYUSH, diabetes, ...). Types with this
+     * prefix accept any field keys matching OPEN_KEY (scalars only, tags stripped, size-limited), so new
+     * specialty forms in the app need no server change.
+     */
+    const OPEN_PREFIX   = 'sp_';
+    const OPEN_TYPE     = '/^sp_[a-z0-9_]{1,36}$/';
+    const OPEN_KEY      = '/^[a-z][a-z0-9_]{0,39}$/';
+    const OPEN_MAX_KEYS = 60;
     const STATUSES  = array('active', 'done', 'cancelled', 'given', 'due', 'closed');
     const MAX_DATA  = 8000; // bytes of JSON per record
 
@@ -102,7 +111,8 @@ class Mobileclinical_model extends CI_Model
             return array(null, 'Invalid record id.');
         }
         $type = isset($p['type']) ? (string) $p['type'] : '';
-        if (!isset(self::TYPES[$type])) {
+        $open = strpos($type, self::OPEN_PREFIX) === 0 && preg_match(self::OPEN_TYPE, $type);
+        if (!$open && !isset(self::TYPES[$type])) {
             return array(null, 'This kind of record cannot be saved from the app.');
         }
         $status = isset($p['status']) ? (string) $p['status'] : 'active';
@@ -115,7 +125,10 @@ class Mobileclinical_model extends CI_Model
         }
         $data = array();
         $in   = isset($p['data']) && is_array($p['data']) ? $p['data'] : array();
-        foreach (self::TYPES[$type] as $k) {
+        $allowed = $open ? array_slice(array_values(array_filter(array_keys($in), function ($k) {
+            return is_string($k) && preg_match(Mobileclinical_model::OPEN_KEY, $k);
+        })), 0, self::OPEN_MAX_KEYS) : self::TYPES[$type];
+        foreach ($allowed as $k) {
             if (array_key_exists($k, $in) && (is_scalar($in[$k]) || $in[$k] === null)) {
                 $data[$k] = is_string($in[$k]) ? mb_substr(strip_tags($in[$k]), 0, 1000) : $in[$k];
             }

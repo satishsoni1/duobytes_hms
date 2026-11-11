@@ -118,6 +118,65 @@ patients it applies to, cards), and if it saves data add its record type and all
 Prescriptions are written to the same tables as the web screens (`ipd_prescription_basic` / `_details` / `_test`),
 so they appear unchanged in the web app and its print layouts.
 
+## Clinic-in-a-tablet features (offline-first)
+
+### Roles
+`Mobileapi_model::$role_modules`: Doctor → `doctor`; Receptionist (and Admin / Super Admin) → `reception`; Nurse → `nursing`;
+Pathologist → `lab`; Pharmacist → `pharmacy`. All roles share one offline store and `sync/*`; the server picks what each role
+pulls (`Mobilestaff_model::scope_patient_ids`) and every upload checks the matching web permission. The web
+*doctor restriction* setting applies to doctors only.
+
+| Section | Tabs | Writes (offline, uploaded on sync) |
+|---|---|---|
+| Reception | OPD queue of every doctor, Patients, Beds, Account | Register patient + OPD visit, revisit, queue status |
+| Nursing | Ward (admitted), OPD triage, Beds, Account | Vitals (`patients_vitals`), nursing notes (`nurse_note`) |
+| Lab | Pathology worklist (pending / reported), Account | Parameter values and result, draft or "reported" |
+| Pharmacy | Medicine stock: low, out, expiring in 90 days, expired | — (read-only) |
+
+### Offline registration
+`patient.register` and `visit.create` reuse the web models (`Patient_model::add_patient`, `User_model::add`,
+`Patient_model::add_opd`), so the rows match the reception screens: patient + `pat<id>` login, OPD case, consultation
+charge, payment, visit. A patient whose mobile and name match an existing one is linked instead of duplicated. The
+consultation charge defaults to the doctor's shift charge; if none is set, reception picks one.
+On the device, new patients and visits get negative ids from a per-device block (`RegistrationRepository.nextLocalId`).
+Prescriptions, services, vitals and specialty records can be written against them at once; ops that still refer to a
+local id wait in the outbox (`SyncModule.isReady`), and registration ops are sent alone (`isBarrier`) so their server ids
+are mapped (`remapPatient` / `remapVisit`) before anything that depends on them is built. Walk-in tokens: the provisional
+token is replaced by the server's (position among the doctor's visits that day, stored in the visit's `opd_status` record).
+
+### Sharing between devices without internet (hotspot / local Wi-Fi)
+Account → Clinic devices. One device is the hub (HTTP on port 47820, UDP beacon on 47821); others connect with its
+6-digit code. Requests and answers are HMAC-signed with a key from the code and the hospital server URL. Devices exchange
+local registrations, today's queue state and triage vitals every 8 s (`LanStore`). Only the creating device uploads a
+record; when it gets server ids it shares the mapping and the others re-link their work (e.g. the doctor's prescription
+for a patient reception registered) and upload it. Data is not encrypted beyond the hotspot's own Wi-Fi encryption.
+
+### Specialty packs (configurable)
+Dental (FDI tooth chart, plan per tooth, balance), Ophthalmology (VA, refraction, IOP, spectacle Rx PDF), Orthopaedics
+(cast removal alert), Dermatology, Physiotherapy (session packages, pain/ROM trends), Ayurveda & Homeopathy, Diabetes
+(annual eye/foot/kidney checks, HbA1c and lab trends from reports). Forms are declared as field specs
+(`specialty/forms/specialty_forms.dart`); record types prefixed `sp_` are accepted by the server with any safe keys
+(`Mobileclinical_model::OPEN_PREFIX`), so a new specialty form needs no server change. These packs are opt-in (by the
+doctor's specialty or Account → Specialty tools) and also show whenever the patient already has such records.
+
+### App lock and WhatsApp
+App lock: 4–6 digit PIN (salted, iterated SHA-256 in the keystore), optional fingerprint/face, re-lock after 0/1/5/15 min in
+the background, escalating wait after 5 wrong PINs; "Forgot PIN" signs out (which deletes local data).
+WhatsApp: follow-up reminders (Today and the follow-up card; `reminded_on` is synced) and the prescription as text, in
+English, हिंदी or मराठी, opened in the doctor's own WhatsApp via `wa.me` (no message is sent without the user pressing send).
+
+### New sync ops
+`patient.register`, `visit.create`, `vitals.save` `{patient_id, measured_at, values{vital_id: value}}`,
+`nurse_note.save` `{ipd_id, date, note, comment}`, `lab.result` `{report_id, values{parameterdetail_id: value}, result, complete}`.
+`sync/pull` also returns `extras`: `vital_types`, `beds`, `lab_worklist` (lab), `pharmacy_stock` (pharmacy, doctors), and masters
+return `opd_doctors`.
+
+### Not done yet
+* Photos on dermatology records (needs an upload endpoint and storage quota handling).
+* Collecting payments other than at registration; dispensing from pharmacy stock; bed allotment/transfer from the app.
+* The write paths of the new ops have been unit-tested against a fake server and their SQL checked read-only against the
+  real schema, but not yet run against a live database: test them on a staging copy before go-live.
+
 ## Running
 
 **Backend.** Deploy the code as usual; nothing else is required. The three API tables are created on the first mobile

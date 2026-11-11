@@ -3285,6 +3285,7 @@ $(document).on('click','#add_newcharge',function(){
                 $("#emobileno").val(data.mobileno);
                 $("#eemail").val(data.email);
                 $("#eaddress").val(data.address);
+                if (window.ShAddress) { ShAddress.fill('#eaddress', data); }
                 $("#eage_year").val(data.age);
                 $("#eage_month").val(data.month);
                 $("#eage_day").val(data.day);

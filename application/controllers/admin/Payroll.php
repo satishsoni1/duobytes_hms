@@ -110,6 +110,10 @@ class Payroll extends Admin_Controller
         $data['monthLeaves']     = $this->monthLeaves($newdate, 3, $id);
         $data["attendanceType"]  = $this->staffattendancemodel->getStaffAttendanceType();
         $data["alloted_leave"]   = $alloted_leave[0]["alloted_leave"];
+        // Approved travel claims not paid yet are offered as earnings on this payslip.
+        $this->load->model('travelexpense_model');
+        $this->travelexpense_model->ensure_schema();
+        $data['travel_claims']   = $this->travelexpense_model->payable($id);
         $data['module'] = 'human_resource';
         $this->load->view("layout/header", $data);
         $this->load->view("admin/payroll/create", $data);
@@ -417,6 +421,10 @@ class Payroll extends Admin_Controller
                     }
                 }
 
+                // Travel claims kept on this payslip are now paid.
+                $this->load->model('travelexpense_model');
+                $this->travelexpense_model->mark_paid($staff_id, (array) $this->input->post('travel_claim_ids'), $payslipid);
+
                 $event_data = array(
                     'role'         => $this->input->post('role', TRUE),
                     'month'        => $month,
@@ -688,6 +696,8 @@ class Payroll extends Admin_Controller
         }
         if (!empty($payslipid)) {
             $this->payroll_model->deletePayslip($payslipid);
+            $this->load->model('travelexpense_model');
+            $this->travelexpense_model->unmark_paid($payslipid);
         }
         redirect('admin/payroll/search/' . $month . "/" . $year . "/" . $role);
     }

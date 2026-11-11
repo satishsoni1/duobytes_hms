@@ -110,6 +110,8 @@ class Vehicle_model extends MY_Model
             $action    = "Update";
             $record_id = $data['id'];
             $this->log($message, $record_id, $action);
+            $this->load->model('discountapproval_model');
+            $this->discountapproval_model->gate('ambulance', $record_id);
 
             if (isset($transaction) && !empty($transaction)) {
 
@@ -146,6 +148,8 @@ class Vehicle_model extends MY_Model
  
             $this->db->insert('ambulance_call', $data);
             $insert_id = $this->db->insert_id();
+            $this->load->model('discountapproval_model');
+            $this->discountapproval_model->gate('ambulance', $insert_id);
             $message   = INSERT_RECORD_CONSTANT . " On Ambulance Call id " . $insert_id;
             $action    = "Insert";
             $record_id = $insert_id;           

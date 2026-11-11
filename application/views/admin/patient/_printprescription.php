@@ -73,7 +73,7 @@ include(APPPATH . 'views/admin/shared/_print_css.php');
                                 <tr>
                                     <th><?php echo $this->lang->line('prescribe_by'); ?></th>
                                     <td>
-                                        <?php echo ($result->prescribe_by_name ? $result->prescribe_by_name . ' ' . $result->prescribe_by_surname . ' (' . $result->prescribe_by_employee_id . ')' : '-'); ?>
+                                        <?php echo ($result->prescribe_by_name ? $result->prescribe_by_name . ' ' . $result->prescribe_by_surname . ' (' . $result->prescribe_by_employee_id . ')' : '-'); ?><?php $this->load->helper('hrms'); echo medical_reg_suffix($result->prescribe_by_employee_id); ?>
                                     </td>
                                     <th><?php echo $this->lang->line('generated_by'); ?></th>
                                     <td>
@@ -81,7 +81,7 @@ include(APPPATH . 'views/admin/shared/_print_css.php');
                                     </td>
                                     <th ><?php echo $this->lang->line('consultant_doctor'); ?></th>
                                     <td >
-                                        <?php echo ($result->name ? $result->name . ' ' . $result->surname . ' (' . $result->doctor_id . ')' : '-'); ?>
+                                        <?php echo ($result->name ? $result->name . ' ' . $result->surname . ' (' . $result->doctor_id . ')' : '-'); ?><?php echo medical_reg_suffix($result->doctor_id); ?>
                                     </td>
                                 </tr> 
 

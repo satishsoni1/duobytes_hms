@@ -15,7 +15,9 @@ class Mobile_patients extends Mobile_api_controller
     {
         parent::__construct();
         $this->authenticate();
-        $this->require_module('doctor');
+        if (empty(array_intersect(array('doctor', 'reception', 'nursing', 'lab'), $this->staff['modules']))) {
+            $this->fail(403, 'module_forbidden', 'This app section is not available for your role.');
+        }
         $this->load->model('mobiledoctor_model');
     }
 

@@ -237,8 +237,10 @@ abstract class Mobile_api_controller extends CI_Controller
         return $this->rbac->hasPrivilege($category, $permission);
     }
 
+    /** The web "doctor restriction" setting limits doctors to their own patients; other roles are not affected. */
     protected function doctor_restricted()
     {
-        return isset($this->settings['doctor_restriction']) && $this->settings['doctor_restriction'] === 'enabled';
+        return isset($this->settings['doctor_restriction']) && $this->settings['doctor_restriction'] === 'enabled'
+            && !empty($this->staff) && in_array('doctor', $this->staff['modules'], true);
     }
 }

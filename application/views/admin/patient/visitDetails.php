@@ -4602,6 +4602,7 @@ $(document).on('input paste keyup','.apply_charge_add_charge,.discount_percentag
                 $("#emobileno").val(data.mobileno);
                 $("#eemail").val(data.email);
                 $("#eaddress").val(data.address);
+                if (window.ShAddress) { ShAddress.fill('#eaddress', data); }
                 $("#age_year").val(data.age);
                 $("#age_month").val(data.month);
                 $("#age_day").val(data.day);

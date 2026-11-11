@@ -18,7 +18,7 @@ class CareTab extends ConsumerWidget {
     final records = ref.watch(clinicalRecordsProvider(d.patient.id)).valueOrNull;
     if (settings == null || records == null) return const SkeletonList(count: 3);
     final t = Theme.of(context);
-    final kits = specialtyToolkits.where((k) => settings.enabled.contains(k.id) && k.appliesTo(d, records)).toList();
+    final kits = specialtyToolkits.where((k) => (settings.enabled.contains(k.id) && k.appliesTo(d, records)) || k.hasRecords(records)).toList();
     final cards = [for (final k in kits) ...k.buildCards(context, d, records)];
     return ListView(padding: padding, children: [
       Wrap(spacing: 6, runSpacing: 6, children: [

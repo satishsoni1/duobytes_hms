@@ -1,0 +1,22 @@
+/* HRMS, travel expense, discount approval and advance screens. Uses the theme's CSS variables when present. */
+.sh-hr-nav .nav-link { border-radius: 8px; padding: 6px 12px; font-size: 13px; color: var(--sh-ink, #334155); background: var(--sh-surface-2, rgba(0,0,0,.03)); }
+.sh-hr-nav .nav-link.active { background: var(--bs-primary, #0d9488); color: #fff; }
+.sh-hr-nav .nav-link .fa { margin-right: 4px; }
+.sh-hr-empty { padding: 28px 12px; text-align: center; color: var(--bs-secondary-color, #6b7280); }
+.sh-hr-empty .fa { font-size: 28px; display: block; margin-bottom: 8px; opacity: .6; }
+.sh-hr-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.6; white-space: nowrap; }
+.sh-hr-pill.pending, .sh-hr-pill.submitted { background: #fef3c7; color: #92400e; }
+.sh-hr-pill.approved, .sh-hr-pill.active { background: #dcfce7; color: #166534; }
+.sh-hr-pill.rejected, .sh-hr-pill.cancelled, .sh-hr-pill.expired { background: #fee2e2; color: #991b1b; }
+.sh-hr-pill.paid, .sh-hr-pill.settled { background: #dbeafe; color: #1e40af; }
+.sh-hr-pill.draft, .sh-hr-pill.muted { background: #e5e7eb; color: #374151; }
+.sh-hr-stat { border: 1px solid var(--bs-border-color, #e5e7eb); border-radius: 10px; padding: 12px 14px; height: 100%; }
+.sh-hr-stat .v { font-size: 20px; font-weight: 700; }
+.sh-hr-stat .l { font-size: 12px; color: var(--bs-secondary-color, #6b7280); }
+.sh-hr-ph { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; cursor: pointer; padding: 2px 6px; border-radius: 4px; background: var(--sh-surface-2, rgba(0,0,0,.05)); display: inline-block; margin: 2px; }
+.sh-hr-ph:hover { background: var(--bs-primary, #0d9488); color: #fff; }
+.sh-letter-preview { border: 1px solid var(--bs-border-color, #e5e7eb); background: #fff; color: #111; padding: 32px 40px; min-height: 300px; font-family: Georgia, 'Times New Roman', serif; font-size: 14px; line-height: 1.6; }
+.sh-hr-table td, .sh-hr-table th { vertical-align: middle; }
+.sh-hr-items td { padding: 4px !important; }
+.sh-hr-items input, .sh-hr-items select { min-width: 80px; }
+@media (max-width: 767px) { .sh-letter-preview { padding: 16px; } }

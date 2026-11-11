@@ -573,6 +573,10 @@ class Pharmacy_model extends MY_Model
         }
 
         $this->db->trans_complete(); # Completing transaction
+        if ($this->db->trans_status() !== false) {
+            $this->load->model('discountapproval_model');
+            $this->discountapproval_model->gate('pharmacy', $insert_id);
+        }
         if ($this->db->trans_status() === false) {
             $this->db->trans_rollback();
             return false;

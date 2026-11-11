@@ -6,6 +6,9 @@ import 'package:uuid/uuid.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/sync/sync_module.dart';
+import '../../../core/lan/lan_store.dart';
+import '../../opd/registration.dart';
+import '../../staff/staff_data.dart';
 import 'billing.dart';
 import 'clinical.dart';
 import 'models.dart';
@@ -57,7 +60,7 @@ class DoctorSyncModule implements SyncModule {
           {
             'key': 'masters',
             'json': jsonEncode({
-              for (final k in const ['dosages', 'intervals', 'durations', 'pathology', 'radiology', 'frequent_medicine_ids']) k: m[k] ?? const [],
+              for (final k in const ['dosages', 'intervals', 'durations', 'pathology', 'radiology', 'frequent_medicine_ids', 'opd_doctors']) k: m[k] ?? const [],
             }),
           },
           conflictAlgorithm: ConflictAlgorithm.replace);
@@ -124,12 +127,14 @@ class DoctorSyncModule implements SyncModule {
 
       // Patients no longer assigned to this doctor leave the device, unless they have unsent work.
       final local = (await tx.query('patients', columns: ['id'])).map((r) => r['id'] as int);
-      for (final pid in local.where((id) => !scope.contains(id)).toList()) {
+      // Negative ids are patients registered on this device and not uploaded yet.
+      for (final pid in local.where((id) => id > 0 && !scope.contains(id)).toList()) {
         final unsent = await tx.query('prescriptions', columns: ['local_id'], where: 'patient_id = ? AND status <> ?', whereArgs: [pid, RxStatus.synced.name], limit: 1);
         final unsentRecords = await tx.query('clinical_records', columns: ['uuid'], where: 'patient_id = ? AND pending = 1', whereArgs: [pid], limit: 1);
         if (unsent.isEmpty && unsentRecords.isEmpty) await _deletePatient(tx, pid);
       }
 
+      await StaffRepository.applyExtras(tx, body['extras'] is Map ? Map<String, dynamic>.from(body['extras'] as Map) : null);
       await adb.setMeta('cursor', body['cursor'] as String?, tx);
     });
   }
@@ -231,11 +236,42 @@ class DoctorSyncModule implements SyncModule {
   // ================================================================== push
   @override
   bool handles(String opType) =>
-      opType.startsWith('prescription.') || opType.startsWith('template.') || const {'record.save', 'charge.add', 'settings.save'}.contains(opType);
+      opType.startsWith('prescription.') ||
+      opType.startsWith('template.') ||
+      const {'record.save', 'charge.add', 'settings.save', 'patient.register', 'visit.create', 'vitals.save', 'nurse_note.save', 'lab.result'}.contains(opType);
+
+  @override
+  bool isBarrier(String opType) => opType == 'patient.register' || opType == 'visit.create';
+
+  @override
+  Future<bool> isReady(Transaction tx, OutboxOp op) async {
+    switch (op.type) {
+      case 'visit.create':
+        return RegistrationRepository.visitReady(tx, int.parse(op.refLocalId!));
+      case 'prescription.save':
+        final r = await tx.query('prescriptions', columns: ['patient_id', 'case_ref_id'], where: 'local_id = ?', whereArgs: [op.refLocalId]);
+        return r.isEmpty || ((r.first['patient_id'] as int) > 0 && (r.first['case_ref_id'] as int) > 0);
+      case 'record.save':
+        final r = await tx.query('clinical_records', columns: ['patient_id', 'json'], where: 'uuid = ?', whereArgs: [op.refLocalId]);
+        if (r.isEmpty) return true;
+        final visit = (jsonDecode(r.first['json'] as String) as Map)['visit_id'];
+        return (r.first['patient_id'] as int) > 0 && !(visit is num && visit < 0);
+      case 'vitals.save':
+      case 'nurse_note.save':
+        return (int.tryParse(op.refLocalId ?? '') ?? 1) > 0;
+      case 'charge.add':
+        final payload = op.payload == null ? null : jsonDecode(op.payload!) as Map<String, dynamic>;
+        return (int.tryParse(op.refLocalId ?? '') ?? 1) > 0 && !RegistrationRepository.refersToLocal(op.type, payload);
+      default:
+        return true;
+    }
+  }
 
   @override
   Future<Map<String, dynamic>?> buildPayload(Transaction tx, OutboxOp op) async {
     if (op.type == 'record.save') return ClinicalRepository.buildPayload(tx, op.refLocalId!, op.seq);
+    if (op.type == 'patient.register') return RegistrationRepository.patientPayload(tx, int.parse(op.refLocalId!));
+    if (op.type == 'visit.create') return RegistrationRepository.visitPayload(tx, int.parse(op.refLocalId!));
     if (op.type == 'prescription.save') {
       final r = await tx.query('prescriptions', where: 'local_id = ?', whereArgs: [op.refLocalId]);
       if (r.isEmpty) return null;
@@ -262,6 +298,16 @@ class DoctorSyncModule implements SyncModule {
         await BillingRepository.applyResult(tx, int.parse(op.refLocalId!), op.opId, result);
       case 'prescription.save':
         await _applyPrescriptionResult(tx, op, status, result);
+      case 'vitals.save':
+      case 'nurse_note.save':
+      case 'lab.result':
+        final payload = jsonDecode(op.payload ?? '{}') as Map<String, dynamic>;
+        await StaffRepository.applyResult(tx, op.type, payload, op.opId, result);
+        if (status == 'ok' && result['data'] is Map) await applyPatientData(tx, Map<String, dynamic>.from(result['data'] as Map));
+      case 'patient.register':
+        await _applyRegisterResult(tx, int.parse(op.refLocalId!), status, result);
+      case 'visit.create':
+        await _applyVisitResult(tx, int.parse(op.refLocalId!), status, result);
       case 'template.save':
         if (status == 'ok') {
           await tx.update('templates', {'server_id': result['server_id'], 'status': RxStatus.synced.name}, where: 'local_id = ?', whereArgs: [op.refLocalId]);
@@ -271,6 +317,34 @@ class DoctorSyncModule implements SyncModule {
       default:
         break; // template.delete: nothing to update locally
     }
+  }
+
+  Future<void> _applyRegisterResult(Transaction tx, int localId, String status, Map<String, dynamic> result) async {
+    if (status != 'ok') {
+      final msg = '${result['message'] ?? 'Registration was not accepted'}';
+      await RegistrationRepository.markRejected(tx, 'patients', localId, msg);
+      // Visits for this patient cannot be created either.
+      for (final v in await tx.query('visits', columns: ['id'], where: 'patient_id = ?', whereArgs: [localId])) {
+        await RegistrationRepository.markRejected(tx, 'visits', v['id'] as int, 'Patient registration was refused: $msg');
+        await tx.delete('outbox', where: "type = 'visit.create' AND ref_local_id = ?", whereArgs: ['${v['id']}']);
+      }
+      return;
+    }
+    final serverId = (result['patient_id'] as num).toInt();
+    await RegistrationRepository.remapPatient(tx, localId, serverId);
+    await LanStore.recordOwnMapping(tx, 'p', localId, serverId);
+    if (result['data'] is Map) await applyPatientData(tx, Map<String, dynamic>.from(result['data'] as Map), pin: true);
+  }
+
+  Future<void> _applyVisitResult(Transaction tx, int localId, String status, Map<String, dynamic> result) async {
+    if (status != 'ok') {
+      await RegistrationRepository.markRejected(tx, 'visits', localId, '${result['message'] ?? 'Visit was not accepted'}');
+      return;
+    }
+    final visitId = (result['visit_id'] as num).toInt();
+    await RegistrationRepository.remapVisit(tx, localId, visitId);
+    await LanStore.recordOwnMapping(tx, 'v', localId, visitId);
+    if (result['data'] is Map) await applyPatientData(tx, Map<String, dynamic>.from(result['data'] as Map));
   }
 
   Future<void> _applyPrescriptionResult(Transaction tx, OutboxOp op, String status, Map<String, dynamic> result) async {

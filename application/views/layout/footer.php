@@ -894,5 +894,7 @@ if (isset($tb_userdata_role['role_id']) && $tb_userdata_role['role_id'] == 7) {
 }
 ?>
 
+<?php $this->load->view('_partials/discount_approval_js'); ?>
+<?php $this->load->view('_partials/patient_address_js'); ?>
 </body>
 </html>

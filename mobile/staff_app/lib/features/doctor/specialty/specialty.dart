@@ -24,6 +24,8 @@ class SpecialtyToolkit {
     required this.appliesTo,
     required this.buildCards,
     this.alwaysOn = false,
+    this.optIn = false,
+    this.recordTypes = const {},
   });
 
   final String id;
@@ -36,6 +38,15 @@ class SpecialtyToolkit {
 
   /// Tools every doctor gets (e.g. follow-ups).
   final bool alwaysOn;
+
+  /// Only on when matched by specialty or switched on by the doctor (not offered to every doctor by default).
+  final bool optIn;
+
+  /// Record types this toolkit writes. A patient who already has such records shows the toolkit to every
+  /// doctor (e.g. a GP sees the dentist's chart), even when it is not switched on.
+  final Set<String> recordTypes;
+
+  bool hasRecords(List<ClinicalRecord> records) => recordTypes.isNotEmpty && records.any((r) => recordTypes.contains(r.type));
 
   /// Whether this toolkit is relevant for a given patient (e.g. paediatrics: under 18).
   final bool Function(PatientDetail d, List<ClinicalRecord> records) appliesTo;
@@ -92,7 +103,7 @@ final specialtySettingsProvider = FutureProvider.autoDispose<SpecialtySettings>(
   }
   // No specialty on record: offer every toolkit (each still only shows for patients it applies to).
   final nothingSpecific = matched.every((id) => specialtyToolkits.firstWhere((t) => t.id == id).alwaysOn);
-  return SpecialtySettings(matched: matched, enabled: nothingSpecific ? {for (final t in specialtyToolkits) t.id} : matched, overridden: false);
+  return SpecialtySettings(matched: matched, enabled: nothingSpecific ? {for (final t in specialtyToolkits) if (!t.optIn) t.id} : matched, overridden: false);
 });
 
 Future<void> setSpecialtyTools(WidgetRef ref, Set<String>? ids) async {

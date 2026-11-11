@@ -424,6 +424,7 @@ $marital_status = $this->config->item('marital_status');
                 $("#emobileno").val(data.mobileno);
                 $("#eemail").val(data.email);
                 $("#eaddress").val(data.address);
+                if (window.ShAddress) { ShAddress.fill('#eaddress', data); }
                 $("#age_year").val(data.age);
                 $("#age_month").val(data.month);
                 $("#age_day").val(data.day);

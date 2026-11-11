@@ -158,7 +158,13 @@ class Mobiledoctor_model extends CI_Model
                 TRIM(CONCAT(COALESCE(s.name,''), ' ', COALESCE(s.surname,''))) doctor_name, vd.appointment_date, vd.case_type, vd.symptoms,
                 vd.bp, vd.height, vd.weight, vd.pulse, vd.temperature, vd.respiration, vd.known_allergies, vd.note, vd.casualty,
                 od.discharged, GREATEST(vd.updated_at, od.updated_at) updated_at,
-                (SELECT q.position FROM appointment ap2 JOIN appointment_queue q ON q.appointment_id = ap2.id WHERE ap2.visit_details_id = vd.id ORDER BY q.id DESC LIMIT 1) token
+                COALESCE(
+                    (SELECT q.position FROM appointment ap2 JOIN appointment_queue q ON q.appointment_id = ap2.id WHERE ap2.visit_details_id = vd.id ORDER BY q.id DESC LIMIT 1),
+                    -- walk-in visits created from the app: token kept in the visit's queue record
+                    (SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(cr.data, '$.token')) AS UNSIGNED) FROM clinical_records cr
+                        WHERE cr.patient_id = od.patient_id AND cr.record_type = 'opd_status' AND cr.deleted = 0
+                          AND JSON_EXTRACT(cr.data, '$.visit_id') = vd.id LIMIT 1)
+                ) token
             FROM visit_details vd JOIN opd_details od ON od.id = vd.opd_details_id LEFT JOIN staff s ON s.id = vd.cons_doctor
             WHERE od.patient_id IN ($in)" . $this->since_clause(array('vd.updated_at', 'od.updated_at'), $since, $args), $args)->result_array();
         foreach ($rows as &$r) {
@@ -643,6 +649,13 @@ class Mobiledoctor_model extends CI_Model
         return true;
     }
 
+    /** Doctors and their consultation charge, for registering OPD visits offline. */
+    private function opd_doctors()
+    {
+        $this->load->model('mobileregistration_model');
+        return $this->mobileregistration_model->opd_doctors();
+    }
+
     // ================================================================== masters
     public function masters($staff_id)
     {
@@ -680,6 +693,7 @@ class Mobiledoctor_model extends CI_Model
             'templates'  => $templates,
             'frequent_medicine_ids' => array_map('intval', array_column($this->smartrx_model->frequent_medicines($staff_id, 20), 'id')),
             'charges'    => $this->mobilebilling_model->charges_master(),
+            'opd_doctors' => $this->opd_doctors(),
             'staff_settings' => (object) $this->mobilebilling_model->staff_settings($staff_id),
             'has_print_header' => $this->mobilebilling_model->prescription_header_path() !== null,
         );

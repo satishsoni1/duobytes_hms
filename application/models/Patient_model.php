@@ -417,6 +417,8 @@ class Patient_model extends MY_Model
             $charge['opd_id'] = $insert_id;
             $this->db->insert("patient_charges", $charge);
             $patient_charge_id                   = $this->db->insert_id();
+            $this->load->model('discountapproval_model');
+            $this->discountapproval_model->gate('charge', $patient_charge_id);
             $opd_visit_data['opd_details_id']    = $insert_id;
             $opd_visit_data['patient_charge_id'] = $patient_charge_id;
             $opd_visit_data['transaction_id']    = $transation_id;           
@@ -464,6 +466,8 @@ class Patient_model extends MY_Model
             $charge['opd_id'] = $opd_visit_data['opd_details_id'];
             $this->db->insert("patient_charges", $charge);
             $patient_charge_id = $this->db->insert_id();
+            $this->load->model('discountapproval_model');
+            $this->discountapproval_model->gate('charge', $patient_charge_id);
             $update_array      = array(
                 'id'                => $insert_id,
                 'transaction_id'    => $transation_id,

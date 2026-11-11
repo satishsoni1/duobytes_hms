@@ -142,7 +142,17 @@ $currency_symbol = $this->customlib->getHospitalCurrencyFormat();
                                             <td><input type="text" id="allowance_amount" name="allowance_amount[]" class="form-control" value="0"></td>
                                             <td class="sh-col-32"><button type="button" onclick="delete_row(0)" class="closebtn" autocomplete="off"><i class="fa fa-remove"></i></button></td>
                                         </tr>
+                                        <?php foreach ((isset($travel_claims) ? $travel_claims : array()) as $tc_i => $tc) { $tc_row = 900 + $tc_i; ?>
+                                        <tr id="row<?php echo $tc_row; ?>" title="Approved travel claim — remove the row to pay it on a later payslip">
+                                            <td><input type="hidden" name="travel_claim_ids[]" value="<?php echo (int) $tc['id']; ?>"><input type="text" class="form-control" name="allowance_type[]" value="<?php echo html_escape('Travel reimbursement ' . $tc['claim_no']); ?>" readonly></td>
+                                            <td><input type="text" name="allowance_amount[]" class="form-control" value="<?php echo number_format(Travelexpense_model::payable_amount($tc), 2, '.', ''); ?>" readonly></td>
+                                            <td class="sh-col-32"><button type="button" onclick="delete_row(<?php echo $tc_row; ?>)" class="closebtn" autocomplete="off"><i class="fa fa-remove"></i></button></td>
+                                        </tr>
+                                        <?php } ?>
                                     </table>
+                                    <?php if (!empty($travel_claims)) { ?>
+                                    <div class="small text-muted mt-1"><i class="fa fa-plane"></i> <?php echo count($travel_claims); ?> approved travel claim(s) added. Click Calculate to update the totals.</div>
+                                    <?php } ?>
                                 </div>
                             </div>
                         </div>

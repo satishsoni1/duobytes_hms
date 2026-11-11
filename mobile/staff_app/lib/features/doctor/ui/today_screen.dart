@@ -16,6 +16,7 @@ import 'queue_row.dart';
 import '../specialty/followups.dart';
 import 'doctor_providers.dart';
 import 'patient_screen.dart';
+import 'whatsapp_actions.dart';
 import 'prescription_editor_screen.dart';
 
 enum _QueueFilter { all, waiting, withDoctor, seen }
@@ -351,13 +352,13 @@ class _AppointmentCard extends StatelessWidget {
   }
 }
 
-class _FollowUpCard extends StatelessWidget {
+class _FollowUpCard extends ConsumerWidget {
   const _FollowUpCard({required this.record, required this.patient});
   final ClinicalRecord record;
   final Patient? patient;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     final cs = t.colorScheme;
     final (label, urgent) = followUpWhen(record.eventDate);
@@ -374,10 +375,19 @@ class _FollowUpCard extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(patient?.name ?? 'Patient #${record.patientId}', style: t.textTheme.titleSmall),
                 const SizedBox(height: 2),
-                Text(record.str('reason') ?? 'Review', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text(
+                  [record.str('reason') ?? 'Review', if (record.str('reminded_on') != null) 'reminded ${fmtDateShort(record.date('reminded_on'))}'].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
               ]),
             ),
-            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Send reminder on WhatsApp',
+              onPressed: () => sendFollowUpReminder(context, ref, record, patient),
+              icon: const WhatsAppIcon(),
+            ),
             Flexible(
               child: StatusPill(label,
                   bg: overdue ? cs.errorContainer : cs.secondaryContainer, fg: overdue ? cs.onErrorContainer : cs.onSecondaryContainer, icon: Icons.event_repeat_rounded),

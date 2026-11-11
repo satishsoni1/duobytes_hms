@@ -370,6 +370,10 @@ class Radio_model extends MY_Model
         }
         //======================Code End==============================
         $this->db->trans_complete(); # Completing transaction
+        if ($this->db->trans_status() !== false) {
+            $this->load->model('discountapproval_model');
+            $this->discountapproval_model->gate('radiology', $id);
+        }
         /* Optional */
 
         if ($this->db->trans_status() === false) {

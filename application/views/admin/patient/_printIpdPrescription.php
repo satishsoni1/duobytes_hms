@@ -66,14 +66,14 @@ include(APPPATH . 'views/admin/shared/_print_css.php');
                                     <td><?php echo ($result->email ?: '-'); ?></td>
                                     <th><?php echo $this->lang->line('prescribe_by'); ?></th>
                                     <td>
-                                        <?php echo ($result->priscribe_by_name ? composeStaffNameByString($result->priscribe_by_name, $result->priscribe_by_surname, $result->priscribe_by_employee_id) : '-'); ?>
+                                        <?php echo ($result->priscribe_by_name ? composeStaffNameByString($result->priscribe_by_name, $result->priscribe_by_surname, $result->priscribe_by_employee_id) : '-'); ?><?php $this->load->helper('hrms'); echo medical_reg_suffix($result->priscribe_by_employee_id); ?>
                                     </td>
                                 </tr>
                                 
                                 <tr>
                                     <th><?php echo $this->lang->line('consultant_doctor'); ?></th>
                                     <td>
-                                        <?php echo ($result->name ? composeStaffNameByString($result->name, $result->surname, $result->employee_id) : '-'); ?>
+                                        <?php echo ($result->name ? composeStaffNameByString($result->name, $result->surname, $result->employee_id) : '-'); ?><?php echo medical_reg_suffix($result->employee_id); ?>
                                     </td>
                                     <th><?php echo $this->lang->line('generated_by'); ?></th>
                                     <td>

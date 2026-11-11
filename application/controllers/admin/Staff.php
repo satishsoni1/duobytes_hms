@@ -40,6 +40,19 @@ class Staff extends Admin_Controller
         $this->load->library('SaasValidation');
         $this->load->helper('customfield_helper');
         $this->sch_setting_detail  = $this->setting_model->getSetting();
+        $this->load->model(array('hms_settings_model', 'hrms_model'));
+        $this->hrms_model->ensure_schema();
+    }
+
+    /** Medical registration fields posted from the staff form (doctors). */
+    private function medical_registration_post()
+    {
+        $till = $this->input->post('medical_reg_valid_till', TRUE);
+        return array(
+            'medical_reg_no'         => mb_substr(trim((string) $this->input->post('medical_reg_no', TRUE)), 0, 60),
+            'medical_council'        => mb_substr(trim((string) $this->input->post('medical_council', TRUE)), 0, 150),
+            'medical_reg_valid_till' => empty($till) ? null : $this->customlib->dateFormatToYYYYMMDD($till),
+        );
     }
 
     /**
@@ -490,6 +503,14 @@ class Staff extends Admin_Controller
         $data["bloodgroup"]     = $this->blood_group;
         $data['title']          = 'Add Staff';
         $data["contract_type"]  = $this->contract_type;
+        $data['staff_id_format'] = $this->hms_settings_model->staff_id_format();
+        if ($data['staff_id_format']['auto']) {
+            // The number is taken at save time, so two people adding staff at once never get the same ID.
+            $data['next_staff_id'] = $this->hms_settings_model->next_staff_id();
+            if ($this->input->method() === 'post') {
+                $_POST['employee_id'] = $data['next_staff_id'];
+            }
+        }
         $custom_fields          = $this->customfield_model->getByBelong('staff');
 		
         foreach ($custom_fields as $custom_fields_key => $custom_fields_value) {
@@ -651,7 +672,7 @@ class Staff extends Admin_Controller
                 'identification_number'       => $identification_number,
                 'local_identification_number' => $local_identification_number,
                 'is_active'                   => 1,
-            );
+            ) + $this->medical_registration_post();
             $leave_type  = $this->input->post('leave_type', TRUE);
             $leave_array = array();
             if (!empty($leave_type)) {
@@ -1018,7 +1039,7 @@ class Staff extends Admin_Controller
                 'pan_number'                  => $pan_number,
                 'identification_number'       => $identification_number,
                 'local_identification_number' => $local_identification_number,
-            );
+            ) + $this->medical_registration_post();
 
             $insert_id = $this->staff_model->add($data1);
             $role_id   = $this->input->post("role", TRUE);

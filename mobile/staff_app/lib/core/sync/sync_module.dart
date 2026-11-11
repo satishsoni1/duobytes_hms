@@ -27,6 +27,14 @@ abstract class SyncModule {
 
   bool handles(String opType);
 
+  /// Ops that create server ids other ops depend on (a new patient, a new visit). They are sent at the
+  /// end of a batch so their result (and the id remapping it triggers) lands before later ops are built.
+  bool isBarrier(String opType);
+
+  /// False while [op] still refers to something the server has not created yet (a local, negative id).
+  /// Such ops wait in the outbox without counting as a failed attempt.
+  Future<bool> isReady(Transaction tx, OutboxOp op);
+
   /// Payload to send for [op], built from current local data. Return null to drop the op
   /// (e.g. the record was deleted locally). May record bookkeeping such as the revision sent.
   Future<Map<String, dynamic>?> buildPayload(Transaction tx, OutboxOp op);

@@ -340,6 +340,20 @@ $has_qr      = file_exists($qr_path);
                                 <div class="sh-fi-label"><?php echo $this->lang->line('staff_marital_status'); ?></div>
                                 <div class="sh-fi-value"><?php echo $this->lang->line(strtolower($staff['marital_status'])) ?: '—'; ?></div>
                             </div>
+                            <?php if (!empty($staff['medical_reg_no'])) {
+                                $mr_till = !empty($staff['medical_reg_valid_till']) ? $staff['medical_reg_valid_till'] : '';
+                                $mr_expired = $mr_till !== '' && $mr_till < date('Y-m-d'); ?>
+                            <div class="sh-field-item">
+                                <div class="sh-fi-label">Medical registration no.</div>
+                                <div class="sh-fi-value"><?php echo html_escape($staff['medical_reg_no']); ?></div>
+                            </div>
+                            <div class="sh-field-item sh-fi-l">
+                                <div class="sh-fi-label">Council / valid till</div>
+                                <div class="sh-fi-value"><?php echo html_escape($staff['medical_council'] ?: '—'); ?>
+                                    <?php if ($mr_till !== '') { ?> · <span class="<?php echo $mr_expired ? 'text-danger fw-bold' : ''; ?>"><?php echo $this->customlib->YYYYMMDDTodateFormat($mr_till); ?><?php echo $mr_expired ? ' (expired)' : ''; ?></span><?php } ?>
+                                </div>
+                            </div>
+                            <?php } ?>
                             <div class="sh-field-item">
                                 <div class="sh-fi-label"><?php echo $this->lang->line('staff_father_name'); ?></div>
                                 <div class="sh-fi-value"><?php echo html_escape($staff['father_name']) ?: '—'; ?></div>
@@ -785,6 +799,12 @@ $has_qr      = file_exists($qr_path);
                         </div>
                         <?php } ?>
                     </div>
+                <?php } ?>
+                <?php if ((int) $staff['id'] === (int) $this->customlib->getStaffID() || $this->rbac->hasPrivilege('staff_hr_document', 'can_view')) { ?>
+                <link rel="stylesheet" href="<?php echo base_url('backend/css/sh-hrms.css'); ?>">
+                <script src="<?php echo base_url('backend/js/sh-hrms.js'); ?>"></script>
+                <div id="shHrDocs" data-src="<?php echo base_url('admin/hrms/staff_documents/' . (int) $staff['id']); ?>"><div class="text-muted small mt-3">Loading HR documents…</div></div>
+                <script>$(function () { var $b = $('#shHrDocs'); $.get($b.data('src'), function (html) { $b.html(html); }); });</script>
                 <?php } ?>
             </div><!-- /tab-pane #documents -->
 

@@ -1180,6 +1180,9 @@ This Function is used to Add Patient
                 'is_active'             => 'yes',
                 'organisation_id'       => $organisation_id,
             );
+            // State / district / taluka / city-village / PIN (new names are added to the lists).
+            $this->load->model('geo_model');
+            $patient_data = array_merge($patient_data, $this->geo_model->patient_post());
 
             $custom_field_post  = $this->input->post("custom_fields[patient]");
             $custom_value_array = array();
@@ -4144,6 +4147,8 @@ This Function is used to Import Multiple Patient Records
                 'organisation_id'       => $organisation_id,
                 'known_allergies'       => $this->input->post('known_allergies', TRUE),
             );
+            $this->load->model('geo_model');
+            $patient_data = array_merge($patient_data, $this->geo_model->patient_post());
 
             if ($blood_group != "") {
                 $patient_data['blood_bank_product_id'] = $blood_group;

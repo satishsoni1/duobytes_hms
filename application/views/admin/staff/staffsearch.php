@@ -61,6 +61,15 @@ $_sh_badge_map = [
                             <?php echo $this->lang->line('staff_payroll'); ?>
                         </a>
                     <?php } ?>
+                    <?php if ($this->rbac->hasPrivilege('staff_hr_document', 'can_view')) { ?>
+                        <a href="<?php echo base_url('admin/hrms/documents'); ?>" class="btn btn-primary btn-sm">Letters &amp; documents</a>
+                    <?php } ?>
+                    <?php if ($this->rbac->hasPrivilege('travel_expense_approval', 'can_view')) { ?>
+                        <a href="<?php echo base_url('admin/travelexpense/approvals'); ?>" class="btn btn-primary btn-sm">Travel expenses</a>
+                    <?php } ?>
+                    <?php if ($this->rbac->hasPrivilege('hospital_policy', 'can_view')) { ?>
+                        <a href="<?php echo base_url('admin/hrms/policies'); ?>" class="btn btn-primary btn-sm">Policies</a>
+                    <?php } ?>
                     <?php if ($this->rbac->hasPrivilege('apply_leave', 'can_view')) { ?>
                         <a href="<?php echo base_url(); ?>admin/staff/leaverequest" class="btn btn-primary btn-sm">
                             <?php echo $this->lang->line('staff_leaves'); ?>

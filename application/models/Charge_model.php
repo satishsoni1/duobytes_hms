@@ -375,9 +375,10 @@ class Charge_model extends MY_Model
             # Something went wrong.
             $this->db->trans_rollback();
             return false;
-        } else {
-            
         }
+        // Discount approval: holds back a discount entered by a non-approver.
+        $this->load->model('discountapproval_model');
+        $this->discountapproval_model->gate('charge', $record_id);
         return $record_id;
     }
 

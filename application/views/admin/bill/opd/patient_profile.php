@@ -1683,6 +1683,7 @@ function update_amount(object_model){
                 $("#emobileno").val(data.mobileno);
                 $("#eemail").val(data.email);
                 $("#eaddress").val(data.address);
+                if (window.ShAddress) { ShAddress.fill('#eaddress', data); }
                 $("#eage_year").val(data.age);
                 $("#eage_month").val(data.month);
                 $("#ebirth_date").val(data.dob);

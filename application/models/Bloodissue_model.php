@@ -16,6 +16,8 @@ class Bloodissue_model extends MY_Model
             $this->db->insert('blood_issue', $data);
             $record_id = $this->db->insert_id();
         }
+        $this->load->model('discountapproval_model');
+        $this->discountapproval_model->gate('blood_issue', $record_id);
 
         $this->db->update("blood_donor_cycle", array("available" => 0), array("id" => $data['blood_donor_cycle_id']));
         //======================Code End==============================

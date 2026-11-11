@@ -21,8 +21,11 @@ class Mobile_sync extends Mobile_api_controller
     {
         parent::__construct();
         $this->authenticate();
-        $this->require_module('doctor');
-        $this->load->model('mobiledoctor_model');
+        // Every staff app section syncs through here; each op checks its own web permission.
+        if (empty(array_intersect(array('doctor', 'reception', 'nursing', 'lab', 'pharmacy'), $this->staff['modules']))) {
+            $this->fail(403, 'module_forbidden', 'This app section is not available for your role.');
+        }
+        $this->load->model(array('mobiledoctor_model', 'mobilestaff_model'));
     }
 
     public function masters()
@@ -47,7 +50,8 @@ class Mobile_sync extends Mobile_api_controller
         $known  = array_flip(array_map('intval', isset($b['known_patient_ids']) ? (array) $b['known_patient_ids'] : array()));
         $pinned = array_slice(array_map('intval', isset($b['pinned_patient_ids']) ? (array) $b['pinned_patient_ids'] : array()), 0, self::MAX_PINNED);
 
-        $scope = array_flip($this->mobiledoctor_model->scope_patient_ids($this->staff['id']));
+        $modules = $this->staff['modules'];
+        $scope   = array_flip($this->mobilestaff_model->scope_patient_ids($modules, $this->staff['id']));
         foreach ($pinned as $pid) {
             if ($pid > 0 && !isset($scope[$pid]) && $this->may_view_patient($pid)) {
                 $scope[$pid] = true;
@@ -76,9 +80,26 @@ class Mobile_sync extends Mobile_api_controller
             'full_sync'         => $since === null,
             'scope_patient_ids' => array_map('intval', $scope),
             'prescription_ids'  => $this->mobiledoctor_model->prescription_ids($scope),
-            'appointments'      => $this->mobiledoctor_model->appointments($this->staff['id'], $since),
+            'appointments'      => $this->mobilestaff_model->appointments($modules, $this->staff['id'], $since),
             'data'              => $data,
+            'extras'            => $this->role_extras($modules),
         ));
+    }
+
+    /** Small role-specific lists sent whole with every pull (bed board, lab worklist, stock, vital types). */
+    private function role_extras(array $modules)
+    {
+        $x = array('vital_types' => $this->mobilestaff_model->vital_types());
+        if (array_intersect(array('reception', 'nursing', 'doctor'), $modules)) {
+            $x['beds'] = $this->mobilestaff_model->beds();
+        }
+        if (in_array('lab', $modules, true) && ($this->can('pathology_test', 'can_view') || $this->can('pathology_bill', 'can_view'))) {
+            $x['lab_worklist'] = $this->mobilestaff_model->lab_worklist();
+        }
+        if (array_intersect(array('pharmacy', 'doctor'), $modules) && $this->can('medicine', 'can_view')) {
+            $x['pharmacy_stock'] = $this->mobilestaff_model->pharmacy_stock();
+        }
+        return $x;
     }
 
     public function push()
@@ -122,6 +143,21 @@ class Mobile_sync extends Mobile_api_controller
                         break;
                     case 'template.delete':
                         $r = $this->op_template_delete($payload);
+                        break;
+                    case 'patient.register':
+                        $r = $this->op_patient_register($payload);
+                        break;
+                    case 'visit.create':
+                        $r = $this->op_visit_create($payload);
+                        break;
+                    case 'vitals.save':
+                        $r = $this->op_vitals_save($payload);
+                        break;
+                    case 'nurse_note.save':
+                        $r = $this->op_nurse_note_save($payload);
+                        break;
+                    case 'lab.result':
+                        $r = $this->op_lab_result($payload);
                         break;
                     default:
                         $r = array('status' => 'rejected', 'message' => 'Unknown change type: ' . $type);
@@ -217,7 +253,7 @@ class Mobile_sync extends Mobile_api_controller
         $date = isset($p['date']) && preg_match('/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/', (string) $p['date']) ? (string) $p['date'] : date('Y-m-d H:i:s');
         $this->load->model('mobilebilling_model');
         $row = $this->mobilebilling_model->add_charge($kind, $ctx['case_id'], isset($p['charge_id']) ? (int) $p['charge_id'] : 0,
-            isset($p['qty']) ? (int) $p['qty'] : 1, isset($p['discount']) ? (float) $p['discount'] : 0, isset($p['note']) ? $p['note'] : '', $date);
+            isset($p['qty']) ? (int) $p['qty'] : 1, isset($p['discount']) ? (float) $p['discount'] : 0, isset($p['note']) ? $p['note'] : '', $date, $this->staff['id']);
         if (is_string($row)) {
             return array('status' => 'rejected', 'message' => $row);
         }
@@ -324,6 +360,119 @@ class Mobile_sync extends Mobile_api_controller
         $this->load->model('smartrx_model');
         $this->smartrx_model->delete_template($this->staff['id'], isset($p['server_id']) ? (int) $p['server_id'] : 0);
         return array('status' => 'ok'); // deleting an already-deleted template is fine
+    }
+
+    /**
+     * New patient registered offline. Links to an existing patient with the same mobile and name
+     * instead of creating a duplicate. Returns the patient's server id and full history bundle.
+     */
+    private function op_patient_register(array $p)
+    {
+        if (!$this->can('opd_patient', 'can_add')) {
+            return array('status' => 'rejected', 'message' => 'You do not have permission to register patients.');
+        }
+        $this->load->model('mobileregistration_model');
+        list($row, $error) = $this->mobileregistration_model->validate_patient($p);
+        if ($error !== null) {
+            return array('status' => 'rejected', 'message' => $error);
+        }
+        $merged = false;
+        $id     = $this->mobileregistration_model->find_duplicate($row);
+        if ($id) {
+            $merged = true;
+        } else {
+            $id = $this->mobileregistration_model->create_patient($row, $this->staff['id']);
+            if (!$id) {
+                return array('status' => 'error', 'message' => 'Could not register the patient; will retry.');
+            }
+            $this->mobileapi_model->audit($this->staff['id'], INSERT_RECORD_CONSTANT . ' On Patient id ' . $id . ' (mobile app)', $id, 'Insert');
+        }
+        return array(
+            'status'       => 'ok',
+            'patient_id'   => $id,
+            'merged'       => $merged,
+            'shared_mobile' => $merged ? 0 : $this->mobileregistration_model->mobile_in_use($row['mobileno'], $id),
+            'data'         => $this->mobiledoctor_model->patient_data(array($id), null),
+        );
+    }
+
+    /** OPD visit (case, consultation charge, payment) created offline. Returns visit/OPD ids and the token. */
+    private function op_visit_create(array $p)
+    {
+        if (!$this->can('opd_patient', 'can_add') && !$this->can('visit', 'can_add')) {
+            return array('status' => 'rejected', 'message' => 'You do not have permission to create OPD visits.');
+        }
+        $this->load->model(array('mobileregistration_model', 'mobileclinical_model'));
+        list($c, $error) = $this->mobileregistration_model->validate_visit($p);
+        if ($error !== null) {
+            return array('status' => 'rejected', 'message' => $error);
+        }
+        $made = $this->mobileregistration_model->create_visit($c, $this->staff['id']);
+        if (!$made) {
+            return array('status' => 'error', 'message' => 'Could not create the visit; will retry.');
+        }
+        list($visit_id, $opd_id, $token) = $made;
+        $this->mobileapi_model->audit($this->staff['id'], INSERT_RECORD_CONSTANT . ' On Opd Details id ' . $opd_id . ' (mobile app)', $opd_id, 'Insert');
+
+        // Queue record (same id the app derives), so every device shows the token and state.
+        $state = isset($p['queue_state']) && in_array($p['queue_state'], array('waiting', 'with_doctor', 'seen', 'skipped'), true) ? $p['queue_state'] : 'waiting';
+        list($q) = $this->mobileclinical_model->validate(array(
+            'uuid' => Mobileregistration_model::queue_uuid($visit_id), 'patient_id' => $c['patient_id'], 'type' => 'opd_status',
+            'event_date' => substr($c['date'], 0, 10), 'status' => 'active',
+            'data' => array('state' => $state, 'visit_id' => $visit_id, 'token' => $token, 'at' => date('c')),
+        ));
+        if ($q) {
+            $this->mobileclinical_model->save($q, $this->staff['id']);
+        }
+        return array(
+            'status'   => 'ok',
+            'visit_id' => $visit_id,
+            'opd_id'   => $opd_id,
+            'token'    => $token,
+            'data'     => $this->mobiledoctor_model->patient_data(array($c['patient_id']), null),
+        );
+    }
+
+    /** Vital signs into patients_vitals (shown on the web patient profile and to every doctor). */
+    private function op_vitals_save(array $p)
+    {
+        if (!$this->can('opd_patient', 'can_edit') && !$this->can('ipd_patient', 'can_edit') && !$this->can('nurse_note', 'can_add')) {
+            return array('status' => 'rejected', 'message' => 'You do not have permission to record vitals.');
+        }
+        $pid = isset($p['patient_id']) ? (int) $p['patient_id'] : 0;
+        $r   = $this->mobilestaff_model->save_vitals($pid, isset($p['measured_at']) ? (string) $p['measured_at'] : '',
+            isset($p['values']) && is_array($p['values']) ? $p['values'] : array());
+        if (is_string($r)) {
+            return array('status' => 'rejected', 'message' => $r);
+        }
+        return array('status' => 'ok', 'data' => $this->mobiledoctor_model->patient_data(array($pid), null));
+    }
+
+    private function op_nurse_note_save(array $p)
+    {
+        if (!$this->can('nurse_note', 'can_add')) {
+            return array('status' => 'rejected', 'message' => 'You do not have permission to add nurse notes.');
+        }
+        $r = $this->mobilestaff_model->save_nurse_note(isset($p['ipd_id']) ? (int) $p['ipd_id'] : 0, isset($p['date']) ? (string) $p['date'] : '',
+            isset($p['note']) ? $p['note'] : '', isset($p['comment']) ? $p['comment'] : '', $this->staff['id']);
+        if (is_string($r)) {
+            return array('status' => 'rejected', 'message' => $r);
+        }
+        return array('status' => 'ok', 'server_id' => $r);
+    }
+
+    private function op_lab_result(array $p)
+    {
+        if (!$this->can('pathology_bill', 'can_edit') && !$this->can('pathology_test', 'can_edit')) {
+            return array('status' => 'rejected', 'message' => 'You do not have permission to enter lab results.');
+        }
+        $r = $this->mobilestaff_model->save_lab_result(isset($p['report_id']) ? (int) $p['report_id'] : 0,
+            isset($p['values']) && is_array($p['values']) ? $p['values'] : array(),
+            array_key_exists('result', $p) ? $p['result'] : null, !empty($p['complete']));
+        if ($r !== true) {
+            return array('status' => $r === 'Could not save; will retry.' ? 'error' : 'rejected', 'message' => $r);
+        }
+        return array('status' => 'ok');
     }
 
     private function may_view_patient($patient_id)

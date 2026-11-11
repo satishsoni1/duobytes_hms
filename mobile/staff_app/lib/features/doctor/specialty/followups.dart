@@ -7,6 +7,7 @@ import '../data/clinical.dart';
 import '../data/models.dart';
 import '../ui/doctor_providers.dart';
 import 'specialty.dart';
+import '../ui/whatsapp_actions.dart';
 
 /// "Due today" / "Overdue by 3 days" / "In 5 days".
 (String, bool) followUpWhen(DateTime? due, {DateTime? today}) {
@@ -73,6 +74,7 @@ class FollowUpsCard extends ConsumerWidget {
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(leading: const WhatsAppIcon(), title: const Text('Send reminder on WhatsApp'), onTap: () => Navigator.pop(ctx, 'whatsapp')),
           ListTile(leading: const Icon(Icons.check_circle_outline_rounded), title: const Text('Mark as done'), onTap: () => Navigator.pop(ctx, 'done')),
           ListTile(leading: const Icon(Icons.edit_calendar_rounded), title: const Text('Reschedule'), onTap: () => Navigator.pop(ctx, 'edit')),
           ListTile(leading: const Icon(Icons.cancel_outlined), title: const Text('Cancel follow-up'), onTap: () => Navigator.pop(ctx, 'cancel')),
@@ -80,6 +82,10 @@ class FollowUpsCard extends ConsumerWidget {
       ),
     );
     if (choice == null || !context.mounted) return;
+    if (choice == 'whatsapp') {
+      await sendFollowUpReminder(context, ref, r, d.patient);
+      return;
+    }
     if (choice == 'edit') {
       await showFollowUpSheet(context, ref, patientId: r.patientId, existing: r);
       return;

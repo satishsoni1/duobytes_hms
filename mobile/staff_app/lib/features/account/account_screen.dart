@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/lan/lan_screen.dart';
+import '../../core/lan/lan_service.dart';
+import '../../core/security/app_lock.dart';
+import '../../core/security/lock_screen.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/ui/widgets.dart';
 import '../doctor/data/models.dart';
@@ -22,6 +26,7 @@ class AccountScreen extends ConsumerWidget {
     final unsynced = ref.watch(unsyncedPrescriptionsProvider).valueOrNull ?? const <Prescription>[];
     final t = Theme.of(context);
     final s = session.staff;
+    final isDoctor = s.modules.contains('doctor');
 
     return Scaffold(
       appBar: AppBar(title: const Text('Account'), toolbarHeight: 64),
@@ -127,6 +132,41 @@ class AccountScreen extends ConsumerWidget {
               ),
           ],
 
+          const SectionHeader('Clinic devices'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+                leading: const IconBadge(Icons.hub_rounded),
+                title: const Text('Share without internet'),
+                subtitle: Text(switch (ref.watch(lanProvider).mode) {
+                  LanMode.hub => 'This device is the hub · ${ref.watch(lanProvider).peers.length} connected',
+                  LanMode.peer => 'Connected to ${ref.watch(lanProvider).host}',
+                  LanMode.off => 'Share the queue and new patients over a hotspot',
+                }),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LanScreen())),
+              ),
+            ),
+          ),
+
+          const SectionHeader('Security'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+                leading: const IconBadge(Icons.lock_rounded),
+                title: const Text('App lock'),
+                subtitle: Text(ref.watch(appLockProvider).enabled ? 'On · PIN${ref.watch(appLockProvider).biometric ? ' and fingerprint' : ''}' : 'Off · anyone with this device can open the app'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AppLockSettingsScreen())),
+              ),
+            ),
+          ),
+
+          if (isDoctor) ...[
           const SectionHeader('Printing'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -143,6 +183,7 @@ class AccountScreen extends ConsumerWidget {
           ),
           const SectionHeader('Specialty tools'),
         const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: _SpecialtyToolsCard()),
+          ],
 
         const SectionHeader('This device'),
           const Padding(

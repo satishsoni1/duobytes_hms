@@ -265,6 +265,35 @@
             ?>
 
 
+            <li class="nav-item <?php echo set_Topmenu('MyHR'); ?>">
+                <a class="nav-link" href="<?php echo base_url('admin/hrms'); ?>">
+                    <i class="fas fa-id-card"></i> <span>My HR</span>
+                </a>
+            </li>
+
+            <?php
+            $da_ci =& get_instance();
+            if ($da_ci->db->table_exists('hms_settings')) {
+                $da_ci->load->model('discountapproval_model');
+                if ($da_ci->discountapproval_model->settings()['enabled']) {
+                    $da_pending = $da_ci->discountapproval_model->pending_count_for($da_ci->customlib->getStaffID()); ?>
+            <li class="nav-item <?php echo set_Topmenu('discountapproval'); ?>">
+                <a class="nav-link" href="<?php echo base_url('admin/discountapproval'); ?>">
+                    <i class="fas fa-percent"></i> <span>Discount approvals</span>
+                    <?php if ($da_pending > 0) { ?><span class="badge bg-danger rounded-pill ms-auto" title="Waiting for your approval"><?php echo (int) $da_pending; ?></span><?php } ?>
+                </a>
+            </li>
+            <?php }
+            } ?>
+
+            <?php if ($this->rbac->hasPrivilege('patient_advance', 'can_view')) { ?>
+            <li class="nav-item <?php echo set_Topmenu('patientadvance'); ?>">
+                <a class="nav-link" href="<?php echo base_url('admin/patientadvance'); ?>">
+                    <i class="fas fa-wallet"></i> <span>Patient advances</span>
+                </a>
+            </li>
+            <?php } ?>
+
             <?php
             if ($this->module_lib->hasActive('duty_roster')) {
                 if ($this->rbac->hasPrivilege('duty_roster', 'can_view') || $this->rbac->hasPrivilege('roster_shift', 'can_view') || $this->rbac->hasPrivilege('roster_list', 'can_view') || $this->rbac->hasPrivilege('roster_assign', 'can_view')) {

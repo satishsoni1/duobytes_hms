@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../opd/registration_screen.dart';
+import '../../staff/staff_actions.dart';
+
+import '../../../core/providers.dart';
 import '../../../core/ui/theme.dart';
 import '../../../core/ui/widgets.dart';
 import '../data/models.dart';
@@ -57,14 +61,20 @@ class _PatientView extends ConsumerWidget {
       child: Scaffold(
         floatingActionButton: FadeSlideIn(
           offset: const Offset(0, 60),
-          child: FloatingActionButton.extended(
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              startPrescription(context, ref, d);
-            },
-            icon: const Icon(Icons.edit_note_rounded),
-            label: const Text('New prescription'),
-          ),
+          child: ref.watch(staffProvider).modules.contains('doctor')
+              ? FloatingActionButton.extended(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    startPrescription(context, ref, d);
+                  },
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('New prescription'),
+                )
+              : FloatingActionButton.extended(
+                  onPressed: () => showStaffPatientActions(context, ref, d),
+                  icon: const Icon(Icons.monitor_heart_rounded),
+                  label: const Text('Vitals & notes'),
+                ),
         ),
         body: NestedScrollView(
           headerSliverBuilder: (context, _) => [
@@ -76,6 +86,11 @@ class _PatientView extends ConsumerWidget {
               foregroundColor: Colors.white,
               systemOverlayStyle: SystemUiOverlayStyle.light,
               actions: [
+                IconButton(
+                  tooltip: 'New OPD visit',
+                  icon: const Icon(Icons.add_task_rounded),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RegisterPatientScreen(existing: p))),
+                ),
                 IconButton(
                   tooltip: p.pinned ? 'Stop keeping offline' : 'Keep on this phone',
                   icon: AnimatedSwitcher(

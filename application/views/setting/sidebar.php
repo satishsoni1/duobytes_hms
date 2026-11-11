@@ -50,6 +50,18 @@
 				<li class="<?php echo set_Innermenu('prefix/index'); ?>"><a class="<?php echo set_Innermenu('prefix/index'); ?>" href="<?php echo site_url('admin/prefix'); ?>"> <?php echo $this->lang->line('prefix_setting'); ?> </a></li>
             <?php } ?>
 
+            <?php if ($this->rbac->hasPrivilege('hr_setting', 'can_view')) { ?>
+                <li><a class="<?php echo set_Innermenu('admin/hrms/settings'); ?>" href="<?php echo base_url('admin/hrms/settings'); ?>">HR Settings</a></li>
+            <?php } ?>
+
+            <?php if ($this->rbac->hasPrivilege('general_setting', 'can_view')) { ?>
+                <li><a class="<?php echo set_Innermenu('admin/geo'); ?>" href="<?php echo base_url('admin/geo'); ?>">Patient Address Lists</a></li>
+            <?php } ?>
+
+            <?php if ($this->rbac->hasPrivilege('discount_approval_setting', 'can_view')) { ?>
+                <li><a class="<?php echo set_Innermenu('admin/discountapproval/settings'); ?>" href="<?php echo base_url('admin/discountapproval/settings'); ?>">Discount Approval</a></li>
+            <?php } ?>
+
             <?php if ($this->rbac->hasPrivilege('superadmin','')) { ?>
                 <li><a class="<?php echo set_Innermenu('admin/roles'); ?>" href="<?php echo base_url(); ?>admin/roles"><?php echo $this->lang->line('roles_permissions'); ?></a></li>
             <?php } ?>

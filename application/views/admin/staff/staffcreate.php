@@ -45,7 +45,12 @@
             <div class="row g-3 mb-3">
                 <div class="col-md-2">
                     <label class="sh-label"><?php echo $this->lang->line('staff_id'); ?> <span class="req">*</span></label>
+                    <?php if (!empty($staff_id_format['auto'])) { ?>
+                    <input id="employee_id" name="employee_id" type="text" class="form-control" value="<?php echo html_escape($next_staff_id); ?>" readonly title="Given automatically when you save (Setup &gt; Settings &gt; HR Settings)" />
+                    <small class="text-muted">Automatic; final number is given on save</small>
+                    <?php } else { ?>
                     <input autofocus id="employee_id" name="employee_id" type="text" class="form-control" value="<?php echo set_value('employee_id') ?>" />
+                    <?php } ?>
                     <span class="text-danger"><?php echo form_error('employee_id'); ?></span>
                 </div>
                 <div class="col-md-2">
@@ -209,6 +214,8 @@
                     <textarea name="note" class="form-control" rows="2"><?php echo set_value('note'); ?></textarea>
                 </div>
             </div>
+
+            <?php $this->load->view('admin/staff/_medical_registration', array('mr' => array())); ?>
 
             <div class="row g-3 mb-3">
                 <div class="col-md-4">
