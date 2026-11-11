@@ -36,7 +36,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 //     $config['base_url'] = ($https ? 'https' : 'http') . '://' . $host . $path . '/';
 // } else {
     //$config['base_url'] = 'http://192.168.1.8:8888/';
-    $config['base_url'] = 'https://hrms.duobytes.in/';
+    $config['base_url'] = 'https://skylark.duobytes.in/';
 //}
 
 /*
