@@ -49,6 +49,12 @@
                         <i class="fas fa-id-card"></i><span> ABDM / ABHA</span></a>
                 </li>
             <?php } ?>
+            <?php if ($this->rbac->hasPrivilege('pmjay_cases', 'can_view') || $this->rbac->hasPrivilege('pmjay_beneficiaries', 'can_view')) { ?>
+                <li class="nav-item <?php echo set_Topmenu('pmjay'); ?>">
+                    <a class="nav-link" href="<?php echo site_url($this->rbac->hasPrivilege('pmjay_cases', 'can_view') ? 'admin/pmjay' : 'admin/pmjay/beneficiaries'); ?>">
+                        <i class="fas fa-hand-holding-medical"></i><span> PM-JAY</span></a>
+                </li>
+            <?php } ?>
             <?php
             if ($this->module_lib->hasActive('bill')) {
                 if (($this->rbac->hasPrivilege('opd_billing', 'can_view')) ||

@@ -76,6 +76,11 @@ $categorylist = $this->operationtheatre_model->category_list();
                             <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_view') || $this->rbac->hasPrivilege('abdm_records', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/abdm/patient/' . (int) $result['patient_id']); ?>"><i class="fas fa-id-card"></i> ABHA / ABDM</a><?php endif; ?>
                             <?php if ($this->rbac->hasPrivilege('patient_login_credential', 'can_view')): ?><button type="button" class="btn btn-sm btn-outline-secondary ms-2 align-middle" data-plc-open="<?php echo (int) $result['patient_id']; ?>"><i class="fas fa-key"></i> Login</button><?php endif; ?>
                             <?php if ($this->rbac->hasPrivilege('ipd_patient', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/casesheet/index/' . (int) $ipdid); ?>"><i class="fas fa-notes-medical"></i> Case Sheet / Discharge Summary</a><?php endif; ?>
+                            <?php if ($this->rbac->hasPrivilege('pmjay_cases', 'can_view')):
+                                $pmjay_case = $this->db->table_exists('pmjay_cases') ? $this->db->select('id')->order_by('id', 'DESC')->get_where('pmjay_cases', array('ipd_id' => (int) $ipdid))->row_array() : null; ?>
+                              <?php if ($pmjay_case): ?><a class="btn btn-sm btn-outline-success ms-2 align-middle" href="<?php echo site_url('admin/pmjay/view/' . (int) $pmjay_case['id']); ?>"><i class="fas fa-hand-holding-medical"></i> PM-JAY case</a>
+                              <?php elseif ($this->rbac->hasPrivilege('pmjay_cases', 'can_add')): ?><a class="btn btn-sm btn-outline-success ms-2 align-middle" href="<?php echo site_url('admin/pmjay/new_case?patient_id=' . (int) $result['patient_id'] . '&ipd_id=' . (int) $ipdid); ?>"><i class="fas fa-hand-holding-medical"></i> PM-JAY</a><?php endif; ?>
+                            <?php endif; ?>
                           </h1>
                           <div class="sub">
                             <span class="mono"><?php echo html_escape($result['case_reference_id']); ?> &middot; <?php echo $this->customlib->getSessionPrefixByType('ipd_no').$ipdid; ?></span>
