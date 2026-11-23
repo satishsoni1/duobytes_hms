@@ -11,6 +11,7 @@ Staff ─▶ Smart Hospital (PHP, Hostinger) ──HTTPS + API key──▶ ABDM
 | Where | Feature |
 |---|---|
 | Patient profile (OPD and IPD) → **ABHA / ABDM** button | Verify an existing ABHA (ABHA number, mobile or Aadhaar OTP) or create a new one via Aadhaar OTP; download the ABHA card and QR; see which records are shared and linked; **Link to ABHA** |
+| Sidebar → **ABDM / ABHA** → Create / Verify ABHA | M1 without choosing a patient first: verify an ABHA (QR, ABHA number, mobile or Aadhaar OTP) or create one via Aadhaar OTP; view the profile, ABHA card and QR; then **Register as new patient** (needs Patient add permission) or **Attach** to an existing patient found by ID, name or mobile |
 | Sidebar → **ABDM / ABHA** → Scan & Share queue | Patients who scan the hospital QR in their ABHA app appear with a token number; register new patients in one click |
 | Sidebar → **ABDM / ABHA** → Records from other hospitals | Send a consent request; once the patient approves in their ABHA app, fetch and read records from other hospitals (deleted automatically when consent ends) |
 | Sidebar → **ABDM / ABHA** → ABDM status | Bridge connection, sync counts, sync errors, **Sync now** |
@@ -38,7 +39,7 @@ application/controllers/admin/Abdm.php
 application/controllers/Abdmcron.php
 application/libraries/Abdm_client.php
 application/models/Abdm_model.php
-application/views/admin/abdm/        (_nav, index, patient, consent, share, hip, activity)
+application/views/admin/abdm/        (_nav, _m1_forms, abha, index, patient, consent, share, hip, activity)
 backend/abdm/abdm.js
 ```
 Changed (small additions only):
