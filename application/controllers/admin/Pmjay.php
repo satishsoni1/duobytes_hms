@@ -298,11 +298,11 @@ class Pmjay extends Admin_Controller
 
         // Move the case along when the payer answered with a decision.
         $note = '';
-        if ($type === 'preauth' && $c['status'] === 'registered') {
+        if ($type === 'preauth' && in_array($c['status'], array('registered', 'query'), true)) {
             $this->pmjay_model->move($c, 'preauth_submitted', array('remarks' => 'Sent via NHCX'), $this->staff_id(), 'nhcx');
             $c = $this->pmjay_model->get_case($id);
         }
-        if ($type === 'claim' && $c['status'] === 'discharged') {
+        if ($type === 'claim' && in_array($c['status'], array('discharged', 'query'), true)) {
             $this->pmjay_model->move($c, 'claim_submitted', array('remarks' => 'Sent via NHCX'), $this->staff_id(), 'nhcx');
             $c = $this->pmjay_model->get_case($id);
         }
