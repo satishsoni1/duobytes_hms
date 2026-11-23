@@ -276,4 +276,53 @@
     load().catch((e) => fail(e.message));
     setInterval(() => load().catch(() => {}), 30000);
   }
+
+  // ================================================================= M2: consents received & data sent
+  if (root.dataset.page === 'hip') {
+    const short = (s) => `<span class="small font-monospace" title="${esc(s)}">${esc(String(s || '').slice(0, 8))}</span>`;
+    async function load() {
+      const [consents, transfers] = await Promise.all([api('hip/consents'), api('hip/transfers')]);
+      $('#hip-consents').innerHTML = consents.length ? consents.map((c) => {
+        const d = c.detail || {};
+        const by = (d.requester && d.requester.name) || (d.hiu && (d.hiu.name || d.hiu.id)) || (d.purpose && d.purpose.code === 'PATRQT' ? 'Patient (ABHA app)' : '');
+        return `<tr><td>${short(c.consent_id)}</td><td>${badge(c.status)}</td><td>${esc(d.patient && d.patient.id)}</td><td>${esc(by)}</td>
+          <td>${esc(d.purpose && d.purpose.text)}</td><td>${esc((d.careContexts || []).length || '')}</td>
+          <td>${fmtDate(d.permission && d.permission.dataEraseAt)}</td><td>${fmt(c.updated_at)}</td></tr>`;
+      }).join('') : '<tr><td colspan="8" class="text-muted">No consents received yet</td></tr>';
+      $('#hip-transfers').innerHTML = transfers.length ? transfers.map((t) => `<tr><td>${short(t.transaction_id)}</td><td>${short(t.consent_id)}</td>
+        <td>${badge(t.status)}</td><td>${esc(t.entries ?? '')}</td><td class="small text-danger">${esc(t.error || '')}</td><td>${fmt(t.created_at)}</td></tr>`).join('')
+        : '<tr><td colspan="6" class="text-muted">No data sent yet</td></tr>';
+    }
+    bind($('#hip-refresh'), load);
+    load().catch((e) => fail(e.message));
+  }
+
+  // ================================================================= Bridge activity: jobs & audit log
+  if (root.dataset.page === 'activity') {
+    const canRetry = !!root.dataset.canRetry;
+    async function jobs() {
+      const j = await api('bridge/jobs');
+      $('#act-job-counts').innerHTML = j.counts.length ? j.counts.map((c) => `${badge(String(c.status).toUpperCase())} ${esc(c.n)}`).join(' &nbsp; ') : '<span class="text-muted">No jobs</span>';
+      $('#act-jobs').innerHTML = j.failed.length ? j.failed.map((x) => `<tr><td>${esc(x.id)}</td><td>${esc(x.type)}</td><td>${esc(x.attempts)}</td>
+        <td class="small text-danger">${esc(x.last_error || '')}</td><td>${fmt(x.updated_at)}</td>
+        <td class="text-end">${canRetry ? `<button class="btn btn-outline-primary btn-sm" data-retry="${esc(x.id)}">Retry</button>` : ''}</td></tr>`).join('')
+        : '<tr><td colspan="6" class="text-muted">No failed jobs</td></tr>';
+      $$('#act-jobs [data-retry]').forEach((b) => bind(b, async () => { await api(`bridge/retry/${b.dataset.retry}`, {}); ok('Job queued again'); jobs(); }));
+    }
+    let oldest = null;
+    async function audit(more) {
+      const rows = await api('bridge/audit' + (more && oldest ? `?before=${encodeURIComponent(oldest)}` : ''));
+      const html = rows.map((a) => `<tr><td class="text-nowrap">${fmt(a.at)}</td><td class="small">${esc(a.actor_type)}${a.actor_id ? ` · ${esc(a.actor_id)}` : ''}</td>
+        <td>${esc(a.action)}</td><td>${a.status ? esc(a.status) : ''}</td>
+        <td class="small text-muted" style="max-width:420px;word-break:break-all">${esc(a.details ? JSON.stringify(a.details).slice(0, 300) : '')}</td></tr>`).join('');
+      if (more) $('#act-audit').insertAdjacentHTML('beforeend', html);
+      else $('#act-audit').innerHTML = html || '<tr><td colspan="5" class="text-muted">No activity yet</td></tr>';
+      if (rows.length) oldest = rows[rows.length - 1].id;
+      show($('#act-audit-more'), rows.length === 100);
+    }
+    bind($('#act-jobs-refresh'), jobs);
+    bind($('#act-audit-more'), () => audit(true));
+    jobs().catch((e) => fail(e.message));
+    audit(false).catch((e) => fail(e.message));
+  }
 })();

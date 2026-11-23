@@ -14,6 +14,8 @@ Staff ─▶ Smart Hospital (PHP, Hostinger) ──HTTPS + API key──▶ ABDM
 | Sidebar → **ABDM / ABHA** → Scan & Share queue | Patients who scan the hospital QR in their ABHA app appear with a token number; register new patients in one click |
 | Sidebar → **ABDM / ABHA** → Records from other hospitals | Send a consent request; once the patient approves in their ABHA app, fetch and read records from other hospitals (deleted automatically when consent ends) |
 | Sidebar → **ABDM / ABHA** → ABDM status | Bridge connection, sync counts, sync errors, **Sync now** |
+| Sidebar → **ABDM / ABHA** → Our records shared | Consents ABDM sent us for this hospital's records (patient, requester, purpose, valid till) and each data transfer, with errors |
+| Sidebar → **ABDM / ABHA** → Bridge activity | Bridge background jobs (failed jobs with **Retry**) and the ABDM audit log for this hospital |
 
 Records shared automatically (from the configured start date):
 
@@ -36,7 +38,7 @@ application/controllers/admin/Abdm.php
 application/controllers/Abdmcron.php
 application/libraries/Abdm_client.php
 application/models/Abdm_model.php
-application/views/admin/abdm/        (_nav, index, patient, consent, share)
+application/views/admin/abdm/        (_nav, index, patient, consent, share, hip, activity)
 backend/abdm/abdm.js
 ```
 Changed (small additions only):
@@ -69,11 +71,14 @@ Database: tables `abdm_patients` and `abdm_sync`, plus the **ABDM** permission g
    - `ABDM ABHA`: front desk and doctors
    - `ABDM Health Records`: doctors and records staff
    - `ABDM Consent Requests`: doctors
-   - `ABDM Settings`: admins
+   - `ABDM Settings`: admins (view: status, bridge activity; edit: **Sync now**, **Retry** failed jobs)
+
+   `ABDM Health Records` (view) also opens **Our records shared**.
 
 ## Notes
 
 - **ABHA is attached only after OTP verification.** Smart Hospital re-reads the profile from ABDM with the patient's token, so staff can't type in someone else's ABHA.
 - **Changes after sharing:** an edited report or prescription is re-sent on the next sync, and the patient's ABHA app is told that new data is available.
 - **Never change `abdm_mrn_prefix` after go-live.** Patients' linked records are keyed by it.
-- **Logs:** CodeIgniter logs are in `application/logs`, and the bridge keeps the full ABDM audit trail.
+- **Logs:** CodeIgniter logs are in `application/logs`. The bridge keeps the full ABDM audit trail; this hospital's part of it is under **Bridge activity**.
+- **Bridge version:** the **Our records shared** and **Bridge activity** tabs need a bridge that has `/api/hms/admin` (`src/hms/admin.js`). Bridge staff accounts and facility registration stay in the bridge console.

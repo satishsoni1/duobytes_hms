@@ -344,4 +344,56 @@ class Abdm extends Admin_Controller
             throw new Exception('Token not found in today\'s queue', 404);
         });
     }
+
+    // ------------------------------------------------------------------ M2: HIP monitor
+    /** Consents other facilities/patients granted for our records, and the data transfers that followed. */
+    public function hip_monitor()
+    {
+        if (!$this->rbac->hasPrivilege('abdm_records', 'can_view')) {
+            access_denied();
+        }
+        $this->page('hip', array(), 'ABDM Shared Records');
+    }
+
+    public function hip($action = '')
+    {
+        $this->guard('abdm_records', 'can_view', false);
+        $this->call(function () use ($action) {
+            switch ($action) {
+                case 'consents':  return $this->abdm_client->get('/hip/consents');
+                case 'transfers': return $this->abdm_client->get('/hip/transfers');
+            }
+            throw new Exception('Unknown action', 404);
+        });
+    }
+
+    // ------------------------------------------------------------------ Bridge activity: jobs + audit
+    public function activity()
+    {
+        if (!$this->rbac->hasPrivilege('abdm_settings', 'can_view')) {
+            access_denied();
+        }
+        $this->page('activity', array(), 'ABDM Activity');
+    }
+
+    public function bridge($action = '', $id = '')
+    {
+        $write = $action === 'retry';
+        $this->guard('abdm_settings', $write ? 'can_edit' : 'can_view', $write);
+        $this->call(function () use ($action, $id) {
+            switch ($action) {
+                case 'jobs':
+                    return $this->abdm_client->get('/admin/jobs');
+                case 'audit':
+                    $before = (string) $this->input->get('before', true);
+                    return $this->abdm_client->get('/admin/audit' . (ctype_digit($before) ? '?before=' . $before : ''));
+                case 'retry':
+                    if (!ctype_digit((string) $id)) {
+                        throw new Exception('Invalid job id', 400);
+                    }
+                    return $this->abdm_client->post('/admin/jobs/' . $id . '/retry', array());
+            }
+            throw new Exception('Unknown action', 404);
+        });
+    }
 }

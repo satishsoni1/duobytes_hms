@@ -9,6 +9,12 @@
     <?php if ($this->rbac->hasPrivilege('abdm_consent', 'can_view')) { ?>
         <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'consent' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/consent'); ?>">Records from other hospitals</a></li>
     <?php } ?>
+    <?php if ($this->rbac->hasPrivilege('abdm_records', 'can_view')) { ?>
+        <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'hip' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/hip_monitor'); ?>">Our records shared</a></li>
+    <?php } ?>
+    <?php if ($this->rbac->hasPrivilege('abdm_settings', 'can_view')) { ?>
+        <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'activity' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/activity'); ?>">Bridge activity</a></li>
+    <?php } ?>
 </ul>
 <?php if (empty($configured)) { ?>
     <div class="alert alert-warning">ABDM bridge is not configured. Set <code>abdm_bridge_url</code> and <code>abdm_api_key</code> in <code>application/config/abdm.php</code>.</div>
