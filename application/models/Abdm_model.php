@@ -152,6 +152,23 @@ class Abdm_model extends CI_Model
         return $out;
     }
 
+    /** Patient picker: exact id, or name / mobile contains (active patients, newest first). */
+    public function search_patients($q)
+    {
+        $q = trim((string) $q);
+        if ($q === '') {
+            return array();
+        }
+        $this->db->select('p.id, p.patient_name, p.gender, p.age, p.mobileno, a.abha_number, a.abha_address')
+            ->from('patients p')->join('abdm_patients a', 'a.patient_id = p.id', 'left')->where('p.is_active', 'yes');
+        if (ctype_digit($q) && strlen($q) < 8) {
+            $this->db->where('p.id', (int) $q);
+        } else {
+            $this->db->group_start()->like('p.patient_name', $q)->or_like('p.mobileno', $q)->group_end();
+        }
+        return $this->db->order_by('p.id', 'DESC')->limit(15)->get()->result_array();
+    }
+
     public function find_patient_by_abha($abha_address, $abha_number)
     {
         $num = $abha_number ? preg_replace('/\D/', '', $abha_number) : '';
@@ -653,7 +670,7 @@ class Abdm_model extends CI_Model
     }
 
     /** Create a Smart Hospital patient from an ABHA profile (Scan & Share). Returns patient id. */
-    public function create_patient_from_abha($profile, $staff_id)
+    public function create_patient_from_abha($profile, $staff_id, $note = 'Registered via ABHA Scan & Share')
     {
         $dob = null;
         if (!empty($profile['yearOfBirth'])) {
@@ -665,7 +682,7 @@ class Abdm_model extends CI_Model
             'patient_name' => $profile['name'], 'dob' => $dob, 'age' => $age, 'month' => 0, 'day' => 0, 'as_of_date' => date('Y-m-d'),
             'mobileno' => isset($profile['phoneNumber']) ? $profile['phoneNumber'] : '', 'gender' => isset($gender[$profile['gender']]) ? $gender[$profile['gender']] : 'Other',
             'marital_status' => '', 'blood_group' => '', 'address' => isset($profile['address']['line']) ? $profile['address']['line'] : '',
-            'patient_type' => '', 'identification_number' => '', 'known_allergies' => '', 'note' => 'Registered via ABHA Scan & Share',
+            'patient_type' => '', 'identification_number' => '', 'known_allergies' => '', 'note' => $note,
             'is_ipd' => '', 'app_key' => '', 'is_antenatal' => 0, 'is_active' => 'yes', 'generated_by' => $staff_id,
         ));
         $id = $this->db->insert_id();

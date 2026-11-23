@@ -7556,8 +7556,102 @@ This Function is used to Import Multiple Patient Records
         echo json_encode($array);
     }
 
+    // ------------------------------------------------------------------ patient login (username / password)
+    /** Per-session token for the login-credential AJAX actions (global CSRF protection is off). */
+    private function login_credential_token()
+    {
+        $t = $this->session->userdata('patlogin_csrf');
+        if (!$t) {
+            $t = bin2hex(random_bytes(24));
+            $this->session->set_userdata('patlogin_csrf', $t);
+        }
+        return $t;
+    }
+
+    private function login_json($data, $status = 200)
+    {
+        $this->output->set_status_header($status)->set_content_type('application/json')
+            ->set_header('Cache-Control: no-store')->set_output(json_encode($data))->_display();
+        exit;
+    }
+
+    private function can_change_login_password()
+    {
+        return $this->rbac->hasPrivilege('patient_login_credential', 'can_view') && $this->rbac->hasPrivilege('patient', 'can_edit');
+    }
+
+    /** GET admin/patient/login_credential/{patient_id}: the patient's portal username and password. */
+    public function login_credential($patient_id = '')
+    {
+        if (!$this->rbac->hasPrivilege('patient_login_credential', 'can_view')) {
+            $this->login_json(array('status' => 'fail', 'message' => 'You do not have permission to view patient login credentials.'), 403);
+        }
+        if (!ctype_digit((string) $patient_id)) {
+            $this->login_json(array('status' => 'fail', 'message' => 'Invalid patient'), 400);
+        }
+        $patient = $this->db->select('id, patient_name')->where('id', $patient_id)->get('patients')->row_array();
+        if (!$patient) {
+            $this->login_json(array('status' => 'fail', 'message' => 'Patient not found'), 404);
+        }
+        $user = $this->db->select('username, password, is_active')->where(array('user_id' => $patient_id, 'role' => 'patient'))->get('users')->row_array();
+        $this->login_json(array(
+            'status'     => 'success',
+            'patient'    => $patient['patient_name'] . ' (' . $patient['id'] . ')',
+            'has_login'  => (bool) $user,
+            'username'   => $user ? $user['username'] : $this->patient_login_prefix . $patient_id,
+            'password'   => $user ? $user['password'] : '',
+            'is_active'  => $user ? $user['is_active'] : '',
+            'can_change' => $this->can_change_login_password(),
+        ));
+    }
+
+    /** POST admin/patient/save_login_password/{patient_id}: set a new password (creates the login if missing). */
+    public function save_login_password($patient_id = '')
+    {
+        if (!$this->can_change_login_password()) {
+            $this->login_json(array('status' => 'fail', 'message' => 'You do not have permission to change patient passwords.'), 403);
+        }
+        $token = (string) $this->input->get_request_header('X-Patlogin-Token', true);
+        if ($this->input->method() !== 'post' || !hash_equals($this->login_credential_token(), $token)) {
+            $this->login_json(array('status' => 'fail', 'message' => 'Invalid request token; reload the page.'), 403);
+        }
+        if (!ctype_digit((string) $patient_id) || !$this->db->where('id', $patient_id)->count_all_results('patients')) {
+            $this->login_json(array('status' => 'fail', 'message' => 'Patient not found'), 404);
+        }
+        $new     = (string) $this->input->post('new_password');
+        $confirm = (string) $this->input->post('confirm_password');
+        if (strlen($new) < 6 || strlen($new) > 50) {
+            $this->login_json(array('status' => 'fail', 'message' => 'Password must be 6 to 50 characters.'), 422);
+        }
+        // The patient login form runs xss_clean on the password, which would alter < > & quotes etc.
+        if (!preg_match('/^[A-Za-z0-9!@#$%^*_.+=?~-]+$/', $new)) {
+            $this->login_json(array('status' => 'fail', 'message' => 'Use letters, digits and ! @ # $ % ^ * _ - . + = ? ~ only (no spaces).'), 422);
+        }
+        if ($new !== $confirm) {
+            $this->login_json(array('status' => 'fail', 'message' => 'Passwords do not match.'), 422);
+        }
+
+        $where = array('user_id' => $patient_id, 'role' => 'patient');
+        $user  = $this->db->select('id')->where($where)->get('users')->row_array();
+        if ($user) {
+            $this->db->where('id', $user['id'])->update('users', array('password' => $new));
+            $created = false;
+        } else {
+            $this->user_model->add(array('username' => $this->patient_login_prefix . $patient_id, 'password' => $new, 'user_id' => $patient_id, 'role' => 'patient'));
+            $created = true;
+        }
+        // Audit trail (the password itself is never logged).
+        $this->patient_model->log(($created ? 'Patient portal login created' : 'Patient portal password changed') . ' On Patient id ' . $patient_id,
+            $patient_id, $created ? 'Insert' : 'Update');
+        $this->login_json(array('status' => 'success', 'created' => $created,
+            'message' => $created ? 'Login created for this patient.' : $this->lang->line('password_changed_successfully')));
+    }
+
     public function patientCredentialReport()
     {
+        if (!$this->rbac->hasPrivilege('patient_login_credential', 'can_view')) {
+            access_denied();
+        }
         $this->session->set_userdata('top_menu', 'Reports');
         $this->session->set_userdata('sub_menu', 'reports/patient');
         $this->session->set_userdata('subsub_menu', 'reports/patient/patientcredentialreport');
@@ -7570,6 +7664,10 @@ This Function is used to Import Multiple Patient Records
 
     public function getcredentialdatatable()
     {
+        if (!$this->rbac->hasPrivilege('patient_login_credential', 'can_view')) {
+            echo json_encode(array('draw' => 0, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => array()));
+            return;
+        }
         $start_date             = '';
         $end_date               = '';
         $search['search_type']  = $this->input->post('search_type');
@@ -7605,6 +7703,7 @@ This Function is used to Import Multiple Patient Records
                 $row[] = $value->patient_name;
                 $row[] = $value->username;
                 $row[] = $value->password;
+                $row[] = '<button type="button" class="btn btn-default btn-xs" data-plc-open="' . (int) $value->id . '" title="' . $this->lang->line('change_password') . '"><i class="fa fa-key"></i> ' . $this->lang->line('change_password') . '</button>';
                 //====================
                 $dt_data[] = $row;
             }

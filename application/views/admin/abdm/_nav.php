@@ -3,6 +3,9 @@
     <?php if ($this->rbac->hasPrivilege('abdm_settings', 'can_view')) { ?>
         <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'index' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm'); ?>">ABDM status</a></li>
     <?php } ?>
+    <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_add')) { ?>
+        <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'abha' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/abha'); ?>">Create / Verify ABHA</a></li>
+    <?php } ?>
     <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_view')) { ?>
         <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'share' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/share'); ?>">Scan &amp; Share queue</a></li>
     <?php } ?>

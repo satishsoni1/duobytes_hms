@@ -74,6 +74,7 @@ $categorylist = $this->operationtheatre_model->category_list();
                             <?php endif; ?>
                             <?php if ($result['is_antenatal'] == 1): ?><span class="badge ms-1 sh-badge-antenatal">Antenatal</span><?php endif; ?>
                             <?php if ($this->rbac->hasPrivilege('abdm_abha', 'can_view') || $this->rbac->hasPrivilege('abdm_records', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/abdm/patient/' . (int) $result['patient_id']); ?>"><i class="fas fa-id-card"></i> ABHA / ABDM</a><?php endif; ?>
+                            <?php if ($this->rbac->hasPrivilege('patient_login_credential', 'can_view')): ?><button type="button" class="btn btn-sm btn-outline-secondary ms-2 align-middle" data-plc-open="<?php echo (int) $result['patient_id']; ?>"><i class="fas fa-key"></i> Login</button><?php endif; ?>
                             <?php if ($this->rbac->hasPrivilege('ipd_patient', 'can_view')): ?><a class="btn btn-sm btn-outline-primary ms-2 align-middle" href="<?php echo site_url('admin/casesheet/index/' . (int) $ipdid); ?>"><i class="fas fa-notes-medical"></i> Case Sheet / Discharge Summary</a><?php endif; ?>
                           </h1>
                           <div class="sub">
@@ -7859,3 +7860,5 @@ function makeid(length) {
 
 <link rel="stylesheet" href="<?php echo base_url('backend/smartrx/smartrx.css'); ?>">
 <script src="<?php echo base_url('backend/smartrx/smartrx.js'); ?>"></script>
+
+<?php $this->load->view('admin/patient/_login_credential'); ?>

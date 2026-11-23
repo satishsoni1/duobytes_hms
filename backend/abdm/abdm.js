@@ -42,21 +42,9 @@
   }
   const show = (el, on = true) => el && el.classList.toggle('d-none', !on);
 
-  // ================================================================= dashboard
-  if (root.dataset.page === 'index') {
-    bind($('#abdm-sync-all'), async () => {
-      const r = await api('sync_all', {});
-      $('#abdm-sync-result').textContent = `Checked ${r.checked}, sent ${r.sent}, unchanged ${r.unchanged}, skipped ${r.skipped}` +
-        (r.errors.length ? `, errors: ${r.errors.join('; ')}` : '');
-      ok('Sync finished');
-    });
-  }
-
-  // ================================================================= patient page
-  if (root.dataset.page === 'patient') {
-    const PID = root.dataset.patient;
-    const S = {};
-
+  // ================================================================= M1: create / verify ABHA (shared)
+  /** Wires the _m1_forms.php controls. done(token) runs once ABDM returns a user token for the verified/created ABHA. */
+  function m1Flow(S, done) {
     // ---- ABHA: create via Aadhaar
     bind($('#c-send'), async () => {
       if (!$('#c-consent').checked) throw new Error('Beneficiary consent is required');
@@ -77,7 +65,7 @@
         $$('#c-sugg button').forEach((b) => b.addEventListener('click', () => ($('#c-addr').value = b.textContent)));
         show($('#c-step4'));
       } else {
-        await attach(S.token);
+        await done(S.token);
       }
     });
     bind($('#c-motp-send'), async () => { const r = await api('m1/mobile_otp', { txnId: S.txnId, mobile: S.mobile }); S.txnId = r.txnId || S.txnId; ok(r.message || 'OTP sent'); });
@@ -88,7 +76,7 @@
     bind($('#c-addr-btn'), async () => {
       const r = await api('m1/address_create', { txnId: S.txnId, abhaAddress: $('#c-addr').value.trim() });
       ok(`ABHA address created: ${r.preferredAbhaAddress || ''}`); show($('#c-step4'), false);
-      await attach(S.token);
+      await done(S.token);
     });
 
     // ---- ABHA card QR (scanner types the JSON payload into the field)
@@ -127,12 +115,30 @@
           `<button type="button" class="btn btn-outline-primary btn-sm me-1 mb-1" data-i="${i}">${esc(a.name)} · ${esc(a.ABHANumber)} · ${esc(a.preferredAbhaAddress)}</button>`).join('');
         $$('#v-accounts button').forEach((b) => bind(b, async () => {
           const s = await api('m1/login_select', { txnId: r.txnId || S.vtxn, abhaNumber: accounts[b.dataset.i].ABHANumber, tToken: r.token });
-          await attach(s.token);
+          await done(s.token);
         }));
         return;
       }
-      await attach(r.token);
+      await done(r.token);
     });
+  }
+
+  // ================================================================= dashboard
+  if (root.dataset.page === 'index') {
+    bind($('#abdm-sync-all'), async () => {
+      const r = await api('sync_all', {});
+      $('#abdm-sync-result').textContent = `Checked ${r.checked}, sent ${r.sent}, unchanged ${r.unchanged}, skipped ${r.skipped}` +
+        (r.errors.length ? `, errors: ${r.errors.join('; ')}` : '');
+      ok('Sync finished');
+    });
+  }
+
+  // ================================================================= patient page
+  if (root.dataset.page === 'patient') {
+    const PID = root.dataset.patient;
+    const S = {};
+
+    m1Flow(S, attach);
 
     /** Save the verified ABHA to this patient (server re-reads the profile with the token). */
     async function attach(token) {
@@ -324,5 +330,78 @@
     bind($('#act-audit-more'), () => audit(true));
     jobs().catch((e) => fail(e.message));
     audit(false).catch((e) => fail(e.message));
+  }
+
+  // ================================================================= M1: standalone create / verify ABHA
+  if (root.dataset.page === 'abha') {
+    const S = {};
+    const patientUrl = root.dataset.patientUrl;
+    const canRegister = !!root.dataset.canRegister;
+    const openLink = (id) => `<a class="btn btn-outline-primary btn-sm" href="${patientUrl}${id}">Open patient #${esc(id)}</a>`;
+
+    function linked(id, text) {
+      $('#m1-existing').innerHTML = `${esc(text)} ${openLink(id)}`;
+      show($('#m1-existing')); show($('#m1-actions'), false);
+    }
+
+    m1Flow(S, async (token) => {
+      if (!token) throw new Error('No ABHA session token returned');
+      S.token = token;
+      const p = await api('abha_lookup', { token });
+      $('#m1-name').textContent = p.name || '';
+      $('#m1-number').textContent = p.number || '';
+      $('#m1-address').textContent = p.address || '';
+      $('#m1-demo').textContent = [p.gender, p.dob].filter(Boolean).join(' · ');
+      $('#m1-mobile').textContent = p.mobile || '';
+      $('#m1-line').textContent = p.line || '';
+      const img = $('#m1-photo');
+      if (p.photo) { img.src = `data:image/jpeg;base64,${p.photo}`; show(img); } else show(img, false);
+      $('#m1-qr-img').innerHTML = '';
+      show($('#m1-result'));
+      if (p.hms_patient_id) {
+        linked(p.hms_patient_id, 'This ABHA is already attached to a patient.');
+      } else {
+        show($('#m1-existing'), false); show($('#m1-actions'));
+        show($('#m1-register'), canRegister);
+        $('#m1-q').value = (p.mobile || '').replace(/\D/g, '').slice(-10);
+        $('#m1-patients').innerHTML = '';
+        if ($('#m1-q').value) search().catch(() => {});
+      }
+      $('#m1-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    bind($('#m1-card'), async () => window.open(URL.createObjectURL(await api('m1/card', { token: S.token }, { blob: true }))));
+    bind($('#m1-qr'), async () => { $('#m1-qr-img').innerHTML = `<img width="200" alt="ABHA QR" src="${URL.createObjectURL(await api('m1/qr', { token: S.token }, { blob: true }))}">`; });
+
+    bind($('#m1-register'), async () => {
+      const r = await api('abha_register', { token: S.token });
+      ok(r.existing ? `Already registered as patient #${r.patientId}` : `Registered as patient #${r.patientId}`);
+      linked(r.patientId, r.existing ? 'This ABHA is already attached to a patient.' : 'New patient registered with this ABHA.');
+    });
+
+    async function search() {
+      const q = $('#m1-q').value.trim();
+      if (!q) return;
+      const rows = await api('abha_patients?q=' + encodeURIComponent(q));
+      $('#m1-patients').innerHTML = rows.length ? rows.map((r) => `<tr><td>#${esc(r.id)}</td><td>${esc(r.patient_name)}</td>
+        <td class="small">${esc(r.gender)}${r.age ? ` · ${esc(r.age)}y` : ''}</td><td class="small">${esc(r.mobileno)}</td>
+        <td class="text-end">${r.abha_number || r.abha_address ? `<span class="badge bg-secondary" title="${esc(r.abha_address)}">Has ABHA</span>`
+          : `<button class="btn btn-success btn-sm" data-attach="${esc(r.id)}">Attach</button>`}</td></tr>`).join('')
+        : '<tr><td class="text-muted">No matching patients</td></tr>';
+      $$('#m1-patients [data-attach]').forEach((b) => bind(b, async () => {
+        const pid = b.dataset.attach;
+        let r = await api('save_abha/' + pid, { token: S.token });
+        if (r.mismatch) {
+          const msg = 'The ABHA details do not match this patient:\n\n- ' + r.mismatch.join('\n- ')
+            + '\n\nAttach only if you have confirmed this is the same person (e.g. checked an ID). Attach anyway?';
+          if (!confirm(msg)) throw new Error('ABHA not attached: details did not match this patient.');
+          r = await api('save_abha/' + pid, { token: S.token, confirmMismatch: true });
+        }
+        ok(`ABHA attached to patient #${pid}`);
+        linked(pid, 'ABHA attached.');
+      }));
+    }
+    bind($('#m1-search'), search);
+    $('#m1-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#m1-search').click(); } });
   }
 })();

@@ -345,6 +345,96 @@ class Abdm extends Admin_Controller
         });
     }
 
+    // ------------------------------------------------------------------ M1: standalone create / verify
+    /** Create or verify an ABHA first, then register a new patient or attach it to an existing one. */
+    public function abha()
+    {
+        if (!$this->rbac->hasPrivilege('abdm_abha', 'can_add')) {
+            access_denied();
+        }
+        $this->page('abha', array(), 'Create / Verify ABHA');
+    }
+
+    /** Profile read from ABDM with the user token (never trust a profile sent by the browser). */
+    private function abha_profile($token)
+    {
+        $prof = $this->abdm_client->post('/m1/profile', array('token' => (string) $token));
+        $number  = isset($prof['ABHANumber']) ? $prof['ABHANumber'] : null;
+        $address = isset($prof['preferredAbhaAddress']) ? $prof['preferredAbhaAddress'] : (isset($prof['phrAddress'][0]) ? $prof['phrAddress'][0] : null);
+        if (!$number && !$address) {
+            throw new Exception('Could not read the ABHA profile', 502);
+        }
+        $name = isset($prof['name']) && trim($prof['name']) !== '' ? trim($prof['name'])
+            : trim(preg_replace('/\s+/', ' ', implode(' ', array_filter(array(@$prof['firstName'], @$prof['middleName'], @$prof['lastName'])))));
+        $y = isset($prof['yearOfBirth']) ? (int) $prof['yearOfBirth'] : 0;
+        $m = isset($prof['monthOfBirth']) ? (int) $prof['monthOfBirth'] : 0;
+        $d = isset($prof['dayOfBirth']) ? (int) $prof['dayOfBirth'] : 0;
+        $dob_raw = isset($prof['dateOfBirth']) ? $prof['dateOfBirth'] : (isset($prof['dob']) ? $prof['dob'] : '');
+        if (!$y && preg_match('/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/', (string) $dob_raw, $mm)) {
+            list(, $d, $m, $y) = array_map('intval', $mm);
+        }
+        $line = trim(implode(', ', array_filter(array(@$prof['address'], @$prof['districtName'], @$prof['stateName'], @$prof['pinCode']))));
+        return array(
+            'raw'     => $prof,
+            'number'  => $number,
+            'address' => $address,
+            'name'    => $name,
+            'gender'  => isset($prof['gender']) ? strtoupper(substr($prof['gender'], 0, 1)) : '',
+            'dob'     => $y ? ($d && $m ? sprintf('%02d-%02d-%04d', $d, $m, $y) : (string) $y) : '',
+            'mobile'  => isset($prof['mobile']) ? $prof['mobile'] : '',
+            'photo'   => isset($prof['profilePhoto']) ? $prof['profilePhoto'] : (isset($prof['photo']) ? $prof['photo'] : ''),
+            'line'    => $line,
+            'y' => $y, 'm' => $m, 'd' => $d,
+        );
+    }
+
+    public function abha_lookup()
+    {
+        $this->guard('abdm_abha', 'can_add');
+        $b = $this->body();
+        $this->call(function () use ($b) {
+            $p = $this->abha_profile(isset($b['token']) ? $b['token'] : '');
+            $hit = $this->abdm_model->find_patient_by_abha($p['address'], $p['number']);
+            unset($p['raw'], $p['y'], $p['m'], $p['d']);
+            $p['hms_patient_id'] = $hit ? (int) $hit['patient_id'] : null;
+            return $p;
+        });
+    }
+
+    /** Register a new HMS patient from the verified ABHA. */
+    public function abha_register()
+    {
+        $this->guard('abdm_abha', 'can_add');
+        if (!$this->rbac->hasPrivilege('patient', 'can_add')) {
+            $this->json(array('error' => 'You do not have permission to add patients.'), 403);
+        }
+        $b = $this->body();
+        $this->call(function () use ($b) {
+            $p = $this->abha_profile(isset($b['token']) ? $b['token'] : '');
+            $hit = $this->abdm_model->find_patient_by_abha($p['address'], $p['number']);
+            if ($hit) {
+                return array('patientId' => (int) $hit['patient_id'], 'existing' => true);
+            }
+            $pid = $this->abdm_model->create_patient_from_abha(array(
+                'name' => $p['name'], 'gender' => $p['gender'], 'phoneNumber' => $p['mobile'],
+                'yearOfBirth' => $p['y'] ?: null, 'monthOfBirth' => $p['m'] ?: null, 'dayOfBirth' => $p['d'] ?: null,
+                'address' => array('line' => $p['line']), 'abhaNumber' => $p['number'], 'abhaAddress' => $p['address'],
+            ), $this->staff_id(), 'Registered via ABHA (verified by OTP)');
+            $this->abdm_model->sync_patient($this->abdm_client, $pid);
+            return array('patientId' => $pid, 'existing' => false);
+        });
+    }
+
+    /** Patient picker for "attach to existing patient": id, name or mobile. */
+    public function abha_patients()
+    {
+        $this->guard('abdm_abha', 'can_add', false);
+        $q = trim((string) $this->input->get('q', true));
+        $this->call(function () use ($q) {
+            return $this->abdm_model->search_patients($q);
+        });
+    }
+
     // ------------------------------------------------------------------ M2: HIP monitor
     /** Consents other facilities/patients granted for our records, and the data transfers that followed. */
     public function hip_monitor()

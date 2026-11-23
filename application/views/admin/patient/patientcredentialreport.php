@@ -63,7 +63,8 @@ $genderList = $this->customlib->getGender();
                                     <th><?php echo $this->lang->line('patient_id'); ?></th>
                                     <th><?php echo $this->lang->line('patient_name'); ?></th>
                                     <th><?php echo $this->lang->line('username'); ?></th>
-                                    <th class="text-end"><?php echo $this->lang->line('password'); ?></th>
+                                    <th ><?php echo $this->lang->line('password'); ?></th>
+                                    <th class="text-end noExport"><?php echo $this->lang->line('action'); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -122,3 +123,5 @@ $genderList = $this->customlib->getGender();
    });
 } ( jQuery ) );
 </script>
+
+<?php $this->load->view('admin/patient/_login_credential'); ?>
