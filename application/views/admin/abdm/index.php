@@ -9,6 +9,10 @@
                     <p class="mb-1"><span class="badge bg-success">Connected</span> to the ABDM bridge</p>
                     <dl class="row mb-0">
                         <dt class="col-sm-4">Facility (HIP/HIU)</dt><dd class="col-sm-8"><?php echo html_escape($ping['facility']['name']); ?> (<?php echo html_escape($ping['facility']['id']); ?>)</dd>
+                        <?php if (!empty($ping['abdm'])) { $a = $ping['abdm']; ?>
+                        <dt class="col-sm-4">ABDM client (linking, consent)</dt><dd class="col-sm-8"><?php echo html_escape($a['gatewayClientId']); ?> <span class="text-muted small"><?php echo html_escape($a['env']); ?></span></dd>
+                        <dt class="col-sm-4">ABHA client (create / verify)</dt><dd class="col-sm-8"><?php echo html_escape($a['abhaClientId']); ?><?php echo $a['abhaClientId'] === $a['gatewayClientId'] ? ' <span class="text-muted small">(same client)</span>' : ''; ?></dd>
+                        <?php } ?>
                         <dt class="col-sm-4">Bridge URL</dt><dd class="col-sm-8"><?php echo html_escape($this->config->item('abdm_bridge_url', 'abdm')); ?></dd>
                     </dl>
                 <?php } else { ?>
