@@ -175,6 +175,6 @@ Out of scope: sharing invoices as a HIP (Smart Hospital bills are not sent today
 | D1 | Bridge database on Neon (`neon init`, `neon deploy`), wired and tested | done | Production branch: 5 migrations, 21 tables, `/ready` READY. Full bridge suite on a temporary Neon branch: 33 pass (before the worker change); worker tests also pass on Neon | 2026-11-26 |
 | D2 | Idle worker so Neon can scale to zero (option b) | done | `test/worker.test.js`: no reads of `jobs` while idle (control: ≥5 in 6 s); a delayed job still fires on time | 2026-11-26 |
 | D3 | Commit both repos | done | Bridge `43d017a`, `2340e70`; Smart Hospital on `skylark-go-live` | 2026-11-26 |
-| D4 | Bridge GitHub repo and push | blocked | `gh` is not installed. Question: create an empty private repo (e.g. `abdm-bridge`) on GitHub, or install gh, so the bridge can be pushed? | |
+| D4 | Bridge GitHub repo and push | done | `satishsoni1/abdm-bridge`, `main` at `2340e70` | 2026-11-26 |
 | D5 | Bridge as a Hostinger Node.js web app from GitHub, env set in hPanel | pending | | |
 | D6 | Smart Hospital `.env`: `ABDM_BRIDGE_URL`, `ABDM_API_KEY`; callback URL registered with ABDM | pending | | |
