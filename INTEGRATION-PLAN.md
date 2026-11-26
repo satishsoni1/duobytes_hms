@@ -176,5 +176,5 @@ Out of scope: sharing invoices as a HIP (Smart Hospital bills are not sent today
 | D2 | Idle worker so Neon can scale to zero (option b) | done | `test/worker.test.js`: no reads of `jobs` while idle (control: ≥5 in 6 s); a delayed job still fires on time | 2026-11-26 |
 | D3 | Commit both repos | done | Bridge `43d017a`, `2340e70`; Smart Hospital on `skylark-go-live` | 2026-11-26 |
 | D4 | Bridge GitHub repo and push | done | `satishsoni1/abdm-bridge`, `main` at `2340e70` | 2026-11-26 |
-| D5 | Bridge as a Hostinger Node.js web app from GitHub, env set in hPanel | pending | | |
+| D5 | Bridge as a Hostinger Node.js web app from GitHub, env set in hPanel | done | https://abdm-bridge.duobytes.in: `/health` UP, `/ready` READY (Neon), callbacks without a gateway token 401, HMS API without a key 401, TLS valid. Entry file `server.cjs` (bridge `3cc54a7`). Open: `NODE_ENV` is not `production` yet (no HSTS, console cookie not Secure) | 2026-11-26 |
 | D6 | Smart Hospital `.env`: `ABDM_BRIDGE_URL`, `ABDM_API_KEY`; callback URL registered with ABDM | pending | | |
