@@ -81,7 +81,18 @@ const digits = (s) => String(s || '').replace(/\D/g, '');
 const mobileHint = (msg) => (String(msg || '').match(/[*xX]{2,}\s*\d{4}/) || [])[0] || '';
 const ABDM_CALL = /^(ABHA |ABHA-PHR |OUT )/;
 const abdmCalls = (rows) => rows.filter((r) => ABDM_CALL.test(r.action));
-const isAadhaar = (v) => (/^\d{12}$/.test(v.replace(/\s/g, '')) ? null : 'The Aadhaar number is 12 digits; type it again.');
+// UIDAI's Verhoeff checksum, which every Aadhaar number passes and the bridge enforces: catches a typo in hidden input.
+const VD = [[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],
+  [5,9,8,7,6,0,4,3,2,1],[6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0,4],[9,8,7,6,5,4,3,2,1,0]];
+const VP = [[0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],[8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],
+  [4,6,8,7,9,3,0,2,1,5],[2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8]];
+const verhoeff = (d) => { let c = 0; [...d].reverse().forEach((x, i) => { c = VD[c][VP[i % 8][Number(x)]]; }); return c === 0; };
+const isAadhaar = (v) => {
+  const d = v.replace(/\s/g, '');
+  if (!/^\d{12}$/.test(d)) return 'The Aadhaar number is 12 digits; type it again.';
+  if (/^[01]/.test(d) || !verhoeff(d)) return 'That is not a valid Aadhaar number (checksum): probably a typo, since the input is hidden. Type it again.';
+  return null;
+};
 const isOtp = (v) => (/^\d{6}$/.test(v) ? null : 'The OTP is 6 digits; type it again.');
 const isMobile = (v) => (/^[6-9]\d{9}$/.test(digits(v).slice(-10)) && digits(v).length >= 10 ? null : 'A 10-digit mobile number, please.');
 const isAbhaNumber = (v) => (digits(v).length === 14 ? null : 'The ABHA number is 14 digits; type it again.');

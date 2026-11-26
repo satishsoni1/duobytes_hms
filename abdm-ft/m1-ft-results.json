@@ -26,15 +26,10 @@
     "iterations": 1
   },
   {
-    "id": "CRT_ABHA_109",
+    "id": "CRT_ABHA_101",
     "outcome": "failed",
     "iterations": 1,
-    "remarks": "Aadhaar OTP request: HTTP 400 \"Validation failed (aadhaar: Aadhaar Number is not valid)\""
-  },
-  {
-    "id": "CRT_ABHA_112",
-    "outcome": "failed",
-    "iterations": 3,
-    "remarks": "depends on a completed enrolment (CRT_ABHA_107) Loop limit reached (3 passes): escalate per run.md with the request ids above."
+    "response": "enrol_verify undefined; address -; abha_lookup undefined",
+    "remarks": "enrolment not completed; address none; profile ABHA  same: false"
   }
 ]
