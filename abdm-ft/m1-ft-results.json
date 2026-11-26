@@ -1,0 +1,40 @@
+[
+  {
+    "id": "CRT_ABHA_104",
+    "outcome": "passed",
+    "iterations": 1,
+    "response": "POST m1/enrol_otp (invalid Aadhaar x4) HTTP 400, no ABDM call",
+    "remarks": "Expected \"Aadhaar Number is not valid\"; observed: len 11: HTTP 400 \"Validation failed (aadhaar: Aadhaar Number is not valid)\"; len 13: HTTP 400 \"Validation failed (aadhaar: Aadhaar Number is not valid)\"; len 12: HTTP 400 \"Validation failed (aadhaar: Aadhaar Number is not valid)\"; len 13: HTTP 400 \"V…"
+  },
+  {
+    "id": "CRT_ABHA_102",
+    "outcome": "passed",
+    "iterations": 1,
+    "response": "POST m1/enrol_otp consent=false HTTP 400",
+    "remarks": "without consent: HTTP 400 \"Beneficiary consent is required\""
+  },
+  {
+    "id": "CRT_ABHA_105",
+    "outcome": "failed",
+    "iterations": 3,
+    "response": "POST m1/enrol_otp HTTP 400",
+    "remarks": "POST m1/enrol_otp HTTP 400, txnId absent, message \"Validation failed (aadhaar: Aadhaar Number is not valid)\" Loop limit reached (3 passes): escalate per run.md with the request ids above."
+  },
+  {
+    "id": "CRT_ABHA_106",
+    "outcome": "passed",
+    "iterations": 1
+  },
+  {
+    "id": "CRT_ABHA_109",
+    "outcome": "failed",
+    "iterations": 1,
+    "remarks": "Aadhaar OTP request: HTTP 400 \"Validation failed (aadhaar: Aadhaar Number is not valid)\""
+  },
+  {
+    "id": "CRT_ABHA_112",
+    "outcome": "failed",
+    "iterations": 3,
+    "remarks": "depends on a completed enrolment (CRT_ABHA_107) Loop limit reached (3 passes): escalate per run.md with the request ids above."
+  }
+]
