@@ -14,6 +14,12 @@ class Abdm_model extends CI_Model
 {
     const ICD10 = 'http://hl7.org/fhir/sid/icd-10';
 
+    // Consent shown before the Aadhaar OTP for ABHA creation (CRT_ABHA_102). Its SHA-256 is stored with each consent,
+    // so change CONSENT_VERSION whenever the text changes. Check it against ABDM's current approved wording:
+    // https://sandbox.abdm.gov.in/sandbox/v3/new-documentation?doc=consentLanguage
+    const CONSENT_VERSION = '1.4';
+    const CONSENT_EN = 'I, hereby declare that I am voluntarily sharing my Aadhaar number and demographic information issued by UIDAI, with National Health Authority (NHA) for the sole purpose of creation of ABHA number. I understand that my ABHA number can be used and shared for purposes as may be notified by ABDM from time to time including provision of healthcare services. Further, I am aware that my personal identifiable information (Name, Address, Age, Date of Birth, Gender and Photograph) may be made available to the entities working in the National Digital Health Ecosystem (NDHE) which inter alia includes stakeholders and entities such as healthcare professionals (e.g. doctors), facilities (e.g. hospitals, laboratories) and data fiduciaries (e.g. health programmes), which are registered with or linked to the Ayushman Bharat Digital Mission (ABDM), and various processes there under. I reserve the right to revoke the given consent at any point of time.';
+
     public function __construct()
     {
         parent::__construct();
@@ -31,7 +37,7 @@ class Abdm_model extends CI_Model
     public function ensure_schema()
     {
         static $done = false;
-        if ($done || (!is_cli() && $this->session->userdata('abdm_schema_v1'))) {
+        if ($done || (!is_cli() && $this->session->userdata('abdm_schema_v3'))) {
             return;
         }
         $this->db->query("CREATE TABLE IF NOT EXISTS `abdm_patients` (
@@ -77,10 +83,87 @@ class Abdm_model extends CI_Model
                     'enable_view' => $c[2], 'enable_add' => $c[3], 'enable_edit' => $c[4], 'enable_delete' => $c[5]));
             }
         }
+        // Consent given for ABHA creation (CRT_ABHA_102): who took it, when, which text. No Aadhaar is stored.
+        $this->db->query("CREATE TABLE IF NOT EXISTS `abdm_consents` (
+            `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            `purpose` varchar(40) NOT NULL,
+            `consent_version` varchar(20) NOT NULL,
+            `language` varchar(10) NOT NULL DEFAULT 'en',
+            `text_sha256` char(64) NOT NULL,
+            `txn_id` varchar(64) DEFAULT NULL,
+            `abha_number` varchar(20) DEFAULT NULL,
+            `patient_id` int DEFAULT NULL,
+            `staff_id` int DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY `abdm_consents_txn` (`txn_id`),
+            KEY `abdm_consents_abha` (`abha_number`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $this->ensure_unique_abha_number();
+        // LOINC code per pathology parameter, set or confirmed by staff (Health_RECORD_CREATION_101).
+        $this->db->query("CREATE TABLE IF NOT EXISTS `abdm_loinc` (
+            `parameter_id` int NOT NULL PRIMARY KEY,
+            `loinc_code` varchar(10) NOT NULL,
+            `loinc_display` varchar(200) DEFAULT NULL,
+            `updated_by` int DEFAULT NULL,
+            `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
         $done = true;
         if (!is_cli()) {
-            $this->session->set_userdata('abdm_schema_v1', true);
+            $this->session->set_userdata('abdm_schema_v3', true);
         }
+    }
+
+    /**
+     * One ABHA number per patient, enforced by the database (TAGGING_UNIQUEPATIENTID_UNIQUEABHANUMBER).
+     * Added only when the existing rows hold no duplicate; otherwise it logs them and leaves the table as it is.
+     */
+    private function ensure_unique_abha_number()
+    {
+        if ($this->db->query("SHOW INDEX FROM abdm_patients WHERE Key_name = 'abdm_patients_number'")->num_rows()) {
+            return;
+        }
+        $dups = $this->db->query("SELECT abha_number, GROUP_CONCAT(patient_id) ids FROM abdm_patients
+            WHERE abha_number IS NOT NULL GROUP BY abha_number HAVING COUNT(*) > 1")->result_array();
+        if ($dups) {
+            log_message('error', 'ABDM: cannot add the unique ABHA number index; the same ABHA number is on several patients: '
+                . implode('; ', array_map(function ($d) { return 'patients ' . $d['ids']; }, $dups)));
+            return;
+        }
+        $this->db->query("ALTER TABLE abdm_patients ADD UNIQUE KEY `abdm_patients_number` (`abha_number`)");
+    }
+
+    /** Record the consent taken before an Aadhaar OTP for ABHA creation. */
+    public function record_consent($purpose, $version, $text, $txn_id, $staff_id, $language = 'en')
+    {
+        $this->db->insert('abdm_consents', array(
+            'purpose' => $purpose, 'consent_version' => (string) $version, 'language' => $language,
+            'text_sha256' => hash('sha256', (string) $text), 'txn_id' => $txn_id ? substr((string) $txn_id, 0, 64) : null,
+            'staff_id' => $staff_id ? (int) $staff_id : null,
+        ));
+    }
+
+    /** Carry the consent forward as the transaction produces an ABHA number, then a patient. */
+    public function consent_abha($txn_id, $abha_number)
+    {
+        if ($txn_id && $abha_number) {
+            $this->db->where('txn_id', (string) $txn_id)->where('abha_number IS NULL', null, false)
+                ->update('abdm_consents', array('abha_number' => $this->format_abha_number($abha_number)));
+        }
+    }
+
+    public function consent_patient($abha_number, $patient_id)
+    {
+        if ($abha_number) {
+            $this->db->where('abha_number', $this->format_abha_number($abha_number))->where('patient_id IS NULL', null, false)
+                ->update('abdm_consents', array('patient_id' => (int) $patient_id));
+        }
+    }
+
+    public function format_abha_number($n)
+    {
+        $d = preg_replace('/\D/', '', (string) $n);
+        return $d === '' ? null : preg_replace('/^(\d{2})(\d{4})(\d{4})(\d{4})$/', '$1-$2-$3-$4', $d);
     }
 
     // =====================================================================================
@@ -103,17 +186,292 @@ class Abdm_model extends CI_Model
             FROM patients p LEFT JOIN abdm_patients a ON a.patient_id = p.id WHERE p.id = ?", array((int) $id))->row_array();
     }
 
+    /**
+     * Tag an ABHA to a patient. Refuses (409) an ABHA number already on another patient, and never touches
+     * another patient's row (REPLACE would delete it once the unique index exists).
+     */
     public function save_abha($patient_id, $abha_number, $abha_address, $abha_name, $staff_id)
     {
+        $number = $abha_number ? $this->format_abha_number($abha_number) : null;
+        if ($number) {
+            $other = $this->db->query('SELECT patient_id FROM abdm_patients WHERE abha_number = ? AND patient_id <> ?',
+                array($number, (int) $patient_id))->row_array();
+            if ($other) {
+                throw new Exception('This ABHA number is already linked to patient #' . $other['patient_id'], 409);
+            }
+        }
         $row = array(
-            'patient_id'   => (int) $patient_id,
-            'abha_number'  => $abha_number ? preg_replace('/^(\d{2})(\d{4})(\d{4})(\d{4})$/', '$1-$2-$3-$4', preg_replace('/\D/', '', $abha_number)) : null,
+            'abha_number'  => $number,
             'abha_address' => $abha_address ? strtolower($abha_address) : null,
             'abha_name'    => $abha_name,
             'verified_by'  => $staff_id,
         );
+        $exists = $this->db->where('patient_id', (int) $patient_id)->count_all_results('abdm_patients') > 0;
+        $debug = $this->db->db_debug;
+        $this->db->db_debug = false;
         $this->db->set('verified_at', 'NOW()', false);
-        $this->db->replace('abdm_patients', $row);
+        $ok = $exists
+            ? $this->db->where('patient_id', (int) $patient_id)->update('abdm_patients', $row)
+            : $this->db->insert('abdm_patients', array('patient_id' => (int) $patient_id) + $row);
+        $err = $this->db->error();
+        $this->db->db_debug = $debug;
+        if (!$ok) {
+            if ((int) $err['code'] === 1062) {
+                throw new Exception('This ABHA number is already linked to another patient', 409);
+            }
+            throw new Exception('Could not save the ABHA: ' . $err['message'], 500);
+        }
+        $this->consent_patient($number, $patient_id);
+    }
+
+    /** A known patient sharing again with another ABHA address on the same ABHA number keeps one record (SHARE_PATIENT_PROFILE_702). */
+    public function update_abha_address($patient_id, $abha_address)
+    {
+        if ($abha_address) {
+            $this->db->where('patient_id', (int) $patient_id)->update('abdm_patients', array('abha_address' => strtolower($abha_address)));
+        }
+    }
+
+    /**
+     * Returning patient (CRT_ABHA_116, SHARE_PATIENT_PROFILE_702): patients who may be this ABHA holder, scored on
+     * mobile, name, gender and age. 'full' is true only when every one of them matches; only then is the record reused.
+     * $p: name, gender (M/F/O), yearOfBirth, mobile.
+     */
+    public function match_candidates($p, $limit = 5)
+    {
+        $mobile = substr(preg_replace('/\D/', '', isset($p['mobile']) ? (string) $p['mobile'] : ''), -10);
+        $name   = trim(isset($p['name']) ? (string) $p['name'] : '');
+        $words  = array_slice(array_filter(preg_split('/\s+/', preg_replace('/[^a-z ]/i', ' ', $name))), 0, 2);
+        if ($mobile === '' && !$words) {
+            return array();
+        }
+        $this->db->select('p.id, p.patient_name, p.gender, p.dob, p.age, p.as_of_date, p.created_at, p.mobileno, p.email, p.address,
+                p.state, p.district, p.city_village, p.pincode, a.abha_number, a.abha_address')
+            ->from('patients p')->join('abdm_patients a', 'a.patient_id = p.id', 'left')->where('p.is_active', 'yes')->group_start();
+        if (strlen($mobile) === 10) {
+            $this->db->like('p.mobileno', $mobile, 'before');
+        }
+        foreach ($words as $w) {
+            $this->db->or_like('p.patient_name', $w);
+        }
+        $rows = $this->db->group_end()->order_by('p.id', 'DESC')->limit(50)->get()->result_array();
+
+        $prof = array('name' => $name, 'gender' => isset($p['gender']) ? $p['gender'] : '', 'yearOfBirth' => isset($p['yearOfBirth']) ? $p['yearOfBirth'] : null);
+        $out = array();
+        foreach ($rows as $r) {
+            $miss = implode(' ', $this->demographic_mismatches($r, $prof));
+            $hp = $this->patient_payload($r);
+            $checks = array(
+                'mobile' => strlen($mobile) === 10 && substr(preg_replace('/\D/', '', (string) $r['mobileno']), -10) === $mobile,
+                'name'   => strpos($miss, 'Name:') === false,
+                'gender' => $prof['gender'] !== '' && strpos($miss, 'Gender:') === false && $this->gender($r['gender']) !== 'U',
+                'age'    => !empty($prof['yearOfBirth']) && $hp['yearOfBirth'] && strpos($miss, 'Year of birth:') === false,
+            );
+            $score = array_sum(array_map('intval', $checks));
+            if ($score < 2) {
+                continue;
+            }
+            $out[] = array(
+                'id' => (int) $r['id'], 'patient_name' => $r['patient_name'], 'gender' => $r['gender'], 'age' => $r['age'],
+                'yearOfBirth' => $hp['yearOfBirth'], 'mobileno' => $r['mobileno'], 'abha_number' => $r['abha_number'],
+                'abha_address' => $r['abha_address'], 'checks' => $checks, 'score' => $score, 'full' => $score === 4,
+            );
+        }
+        usort($out, function ($a, $b) { return $b['score'] - $a['score'] ?: $b['id'] - $a['id']; });
+        return array_slice($out, 0, $limit);
+    }
+
+    /**
+     * Today's Scan & Share tokens, each registered (or matched) automatically. Returns the rows with hms_patient_id,
+     * and 'register_error' for one that could not be registered (the screen offers a retry).
+     */
+    public function process_share_queue($client, $staff_id)
+    {
+        $rows = $client->get('/m1/share/queue');
+        foreach ($rows as &$r) {
+            try {
+                list($pid, $how) = $this->register_shared($r, $staff_id);
+                $r['hms_patient_id'] = $pid;
+                $r['registered'] = $how;
+                if ($how !== 'abha') {
+                    $this->sync_patient($client, $pid);
+                }
+            } catch (Exception $e) {
+                $r['hms_patient_id'] = null;
+                $r['register_error'] = $e->getMessage();
+                log_message('error', 'ABDM: Scan & Share token ' . (int) $r['id'] . ' not registered: ' . $e->getMessage());
+            }
+            unset($r['profile']);
+        }
+        return $rows;
+    }
+
+    // =====================================================================================
+    // LOINC codes for lab results (Health_RECORD_CREATION_101)
+    // =====================================================================================
+    /**
+     * Suggestions for common tests, offered on the Lab codes screen and saved only when staff confirm them.
+     * Most specific first: the first pattern that matches a parameter name wins. Each code passes the LOINC check digit.
+     */
+    private static $LOINC_SEED = array(
+        array('/\b(hba1c|glycated|glycosylated)\b/', '4548-4', 'Hemoglobin A1c/Hemoglobin.total in Blood'),
+        array('/\bmchc\b/', '786-4', 'MCHC [Mass/volume] by Automated count'),
+        array('/\bmch\b/', '785-6', 'MCH [Entitic mass] by Automated count'),
+        array('/\bmcv\b/', '787-2', 'MCV [Entitic volume] by Automated count'),
+        array('/\b(ha?emoglobin|hb|hgb)\b/', '718-7', 'Hemoglobin [Mass/volume] in Blood'),
+        array('/\b(wbc|tlc|total (leu[ck]ocyte|wbc) count|leu[ck]ocytes?)\b/', '6690-2', 'Leukocytes [#/volume] in Blood by Automated count'),
+        array('/\b(rbc|red (blood )?cell count|erythrocytes?)\b/', '789-8', 'Erythrocytes [#/volume] in Blood by Automated count'),
+        array('/\b(platelets?|plt)\b/', '777-3', 'Platelets [#/volume] in Blood by Automated count'),
+        array('/\b(pcv|ha?ematocrit|hct)\b/', '4544-3', 'Hematocrit [Volume Fraction] of Blood by Automated count'),
+        array('/\besr\b|erythrocyte sedimentation/', '4537-7', 'Erythrocyte sedimentation rate by Westergren method'),
+        array('/\b(fbs|fasting (blood )?(sugar|glucose)|glucose,? fasting|bsl,? fasting)\b/', '1558-6', 'Fasting glucose [Mass/volume] in Serum or Plasma'),
+        array('/\b(rbs|random (blood )?(sugar|glucose)|glucose|blood sugar)\b/', '2345-7', 'Glucose [Mass/volume] in Serum or Plasma'),
+        array('/\bcreatinine\b/', '2160-0', 'Creatinine [Mass/volume] in Serum or Plasma'),
+        array('/\b(bun|blood urea nitrogen|urea nitrogen)\b/', '3094-0', 'Urea nitrogen [Mass/volume] in Serum or Plasma'),
+        array('/\burea\b/', '3091-6', 'Urea [Mass/volume] in Serum or Plasma'),
+        array('/\bhdl\b/', '2085-9', 'Cholesterol in HDL [Mass/volume] in Serum or Plasma'),
+        array('/\bldl\b/', '13457-7', 'Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation'),
+        array('/\btriglycerides?\b/', '2571-8', 'Triglyceride [Mass/volume] in Serum or Plasma'),
+        array('/\b(total )?cholesterol\b/', '2093-3', 'Cholesterol [Mass/volume] in Serum or Plasma'),
+        array('/\b(sgpt|alt|alanine aminotransferase)\b/', '1742-6', 'Alanine aminotransferase [Enzymatic activity/volume] in Serum or Plasma'),
+        array('/\b(sgot|ast|aspartate aminotransferase)\b/', '1920-8', 'Aspartate aminotransferase [Enzymatic activity/volume] in Serum or Plasma'),
+        array('/\b(alp|alkaline phosphatase)\b/', '6768-6', 'Alkaline phosphatase [Enzymatic activity/volume] in Serum or Plasma'),
+        array('/\b(direct|conjugated) bilirubin\b|bilirubin,? (direct|conjugated)/', '1968-7', 'Bilirubin.direct [Mass/volume] in Serum or Plasma'),
+        array('/\bbilirubin\b/', '1975-2', 'Bilirubin.total [Mass/volume] in Serum or Plasma'),
+        array('/\balbumin\b/', '1751-7', 'Albumin [Mass/volume] in Serum or Plasma'),
+        array('/\btotal protein\b|protein,? total/', '2885-2', 'Protein [Mass/volume] in Serum or Plasma'),
+        array('/\b(sodium|na\+?)\b/', '2951-2', 'Sodium [Moles/volume] in Serum or Plasma'),
+        array('/\b(potassium|k\+?)\b/', '2823-3', 'Potassium [Moles/volume] in Serum or Plasma'),
+        array('/\b(chloride|cl-?)\b/', '2075-0', 'Chloride [Moles/volume] in Serum or Plasma'),
+        array('/\bcalcium\b/', '17861-6', 'Calcium [Mass/volume] in Serum or Plasma'),
+        array('/\buric acid\b|\burate\b/', '3084-1', 'Urate [Mass/volume] in Serum or Plasma'),
+        array('/\btsh\b|thyroid stimulating/', '3016-3', 'Thyrotropin [Units/volume] in Serum or Plasma'),
+        array('/\b(ft4|free t4|free thyroxine)\b/', '3024-7', 'Thyroxine (T4) free [Mass/volume] in Serum or Plasma'),
+        array('/\b(t3|total t3|triiodothyronine)\b/', '3053-6', 'Triiodothyronine (T3) [Mass/volume] in Serum or Plasma'),
+    );
+
+    /** LOINC mod-10 check digit: catches a mistyped code. */
+    public function loinc_valid($code)
+    {
+        if (!preg_match('/^(\d{1,7})-(\d)$/', (string) $code, $m)) {
+            return false;
+        }
+        $d = strrev($m[1]);
+        $odd = $even = '';
+        for ($i = 0; $i < strlen($d); $i++) {
+            if ($i % 2 === 0) {
+                $odd = $d[$i] . $odd;
+            } else {
+                $even = $d[$i] . $even;
+            }
+        }
+        $sum = array_sum(str_split($even . (string) ((int) $odd * 2)));
+        return (10 - $sum % 10) % 10 === (int) $m[2];
+    }
+
+    public function loinc_suggest($parameter_name)
+    {
+        $n = strtolower(preg_replace('/\s+/', ' ', (string) $parameter_name));
+        foreach (self::$LOINC_SEED as $s) {
+            if (preg_match($s[0], $n)) {
+                return array('code' => $s[1], 'display' => $s[2]);
+            }
+        }
+        return null;
+    }
+
+    /** Pathology parameters with their saved code (if any), a suggestion and how many tests use them. */
+    public function loinc_rows()
+    {
+        $rows = $this->db->query("SELECT p.id, p.parameter_name, p.reference_range, COALESCE(u.unit_name, '') unit,
+                l.loinc_code, l.loinc_display, l.updated_at, (SELECT COUNT(*) FROM pathology_parameterdetails d WHERE d.pathology_parameter_id = p.id) used
+            FROM pathology_parameter p LEFT JOIN unit u ON u.id = p.unit LEFT JOIN abdm_loinc l ON l.parameter_id = p.id
+            ORDER BY (l.loinc_code IS NULL) DESC, p.parameter_name")->result_array();
+        foreach ($rows as &$r) {
+            $r['suggestion'] = $r['loinc_code'] ? null : $this->loinc_suggest($r['parameter_name']);
+        }
+        return $rows;
+    }
+
+    public function save_loinc($parameter_id, $code, $display, $staff_id)
+    {
+        if (!$this->db->get_where('pathology_parameter', array('id' => (int) $parameter_id))->row()) {
+            throw new Exception('Unknown lab parameter', 404);
+        }
+        $code = trim((string) $code);
+        if ($code === '') {
+            $this->db->delete('abdm_loinc', array('parameter_id' => (int) $parameter_id));
+            $this->resend_lab_reports($parameter_id);
+            return;
+        }
+        if (!$this->loinc_valid($code)) {
+            throw new Exception('"' . $code . '" is not a valid LOINC code (format 1234-5, with its check digit)', 400);
+        }
+        $this->db->query('INSERT INTO abdm_loinc (parameter_id, loinc_code, loinc_display, updated_by) VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE loinc_code = VALUES(loinc_code), loinc_display = VALUES(loinc_display), updated_by = VALUES(updated_by)',
+            array((int) $parameter_id, $code, mb_substr(trim((string) $display), 0, 200) ?: null, $staff_id ? (int) $staff_id : null));
+        $this->resend_lab_reports($parameter_id);
+    }
+
+    /** Lab reports using this parameter go out again on the next sync, now carrying the code (older ones too). */
+    private function resend_lab_reports($parameter_id)
+    {
+        $this->db->query("UPDATE abdm_sync SET synced_at = '2000-01-01' WHERE entity = 'lab' AND entity_id IN (
+            SELECT v.pathology_report_id FROM pathology_report_parameterdetails v
+            JOIN pathology_parameterdetails pd ON pd.id = v.pathology_parameterdetail_id WHERE pd.pathology_parameter_id = ?)", array((int) $parameter_id));
+    }
+
+    /** Hospital-side details of a patient, for the ABHA vs HMIS comparison screen (VRFY_ABHA_308). */
+    public function patient_summary($id)
+    {
+        $p = $this->get_patient($id);
+        if (!$p) {
+            return null;
+        }
+        $hp = $this->patient_payload($p);
+        return array(
+            'id' => (int) $p['id'], 'name' => $p['patient_name'], 'gender' => $p['gender'],
+            'dob' => $hp['dob'] ? date('d-m-Y', strtotime($hp['dob'])) : ($hp['yearOfBirth'] ? (string) $hp['yearOfBirth'] : ''),
+            'mobile' => $p['mobileno'], 'email' => $p['email'],
+            'line' => trim(implode(', ', array_filter(array($p['address_line'] ?: $p['address'], $p['city_village'], $p['district'], $p['state'], $p['pincode'])))),
+            'abhaNumber' => $p['abha_number'], 'abhaAddress' => $p['abha_address'],
+        );
+    }
+
+    /**
+     * Register a patient from a Scan & Share token with no manual step (SHARE_PATIENT_PROFILE_701/702):
+     * same ABHA number → that patient (address updated if it changed); else a full demographic match with no ABHA of
+     * its own → tag the ABHA to it; else a new patient. Returns array(patient_id, 'abha'|'matched'|'new').
+     */
+    public function register_shared($row, $staff_id)
+    {
+        $prof = isset($row['profile']) && is_array($row['profile']) ? $row['profile'] : array();
+        $address = isset($row['abha_address']) ? $row['abha_address'] : (isset($prof['abhaAddress']) ? $prof['abhaAddress'] : null);
+        $number = isset($row['abhaNumber']) ? $row['abhaNumber'] : (isset($prof['abhaNumber']) ? $prof['abhaNumber'] : null);
+
+        $by_number = $number ? $this->db->query("SELECT patient_id, abha_address FROM abdm_patients WHERE REPLACE(abha_number, '-', '') = ?",
+            array(preg_replace('/\D/', '', $number)))->row_array() : null;
+        if ($by_number) {
+            if ($address && strtolower($address) !== strtolower((string) $by_number['abha_address'])) {
+                $this->update_abha_address($by_number['patient_id'], $address);
+            }
+            return array((int) $by_number['patient_id'], 'abha');
+        }
+        $hit = $this->find_patient_by_abha($address, null);
+        if ($hit) {
+            return array((int) $hit['patient_id'], 'abha');
+        }
+        $name = isset($prof['name']) ? $prof['name'] : (isset($row['name']) ? $row['name'] : '');
+        foreach ($this->match_candidates(array('name' => $name, 'gender' => isset($prof['gender']) ? $prof['gender'] : '',
+            'yearOfBirth' => isset($prof['yearOfBirth']) ? $prof['yearOfBirth'] : null,
+            'mobile' => isset($prof['phoneNumber']) ? $prof['phoneNumber'] : (isset($prof['mobile']) ? $prof['mobile'] : '')), 1) as $c) {
+            if ($c['full'] && !$c['abha_number'] && !$c['abha_address']) {
+                $this->save_abha($c['id'], $number, $address, $name, $staff_id);
+                return array($c['id'], 'matched');
+            }
+        }
+        $pid = $this->create_patient_from_abha(array_merge($prof, array('name' => $name, 'abhaAddress' => $address, 'abhaNumber' => $number)), $staff_id);
+        return array($pid, 'new');
     }
 
     /**
@@ -473,19 +831,26 @@ class Abdm_model extends CI_Model
                     return null;
                 }
                 // {$t}_parameter.unit is an id into the `unit` table.
-                $params = $this->db->query("SELECT p.parameter_name, COALESCE(u.unit_name, '') unit, p.reference_range, v.{$t}_report_value val
+                // LOINC codes confirmed on the Lab codes screen (pathology only).
+                $loinc_sel  = $lab ? 'l.loinc_code' : 'NULL loinc_code';
+                $loinc_join = $lab ? 'LEFT JOIN abdm_loinc l ON l.parameter_id = p.id' : '';
+                $params = $this->db->query("SELECT p.parameter_name, COALESCE(u.unit_name, '') unit, p.reference_range, v.{$t}_report_value val, $loinc_sel
                     FROM {$t}_report_parameterdetails v
                     JOIN {$t}_parameterdetails pd ON pd.id = v.{$t}_parameterdetail_id
                     JOIN {$t}_parameter p ON p.id = pd.{$t}_parameter_id
-                    LEFT JOIN unit u ON u.id = p.unit
+                    LEFT JOIN unit u ON u.id = p.unit $loinc_join
                     WHERE v.{$t}_report_id = ?", array((int) $id))->result_array();
                 $obs = array();
                 foreach ($params as $p) {
                     if (trim((string) $p['val']) === '') {
                         continue;
                     }
-                    $obs[] = array('name' => $p['parameter_name'], 'value' => $this->num_or_str($p['val']), 'unit' => (string) $p['unit'],
+                    $o = array('name' => $p['parameter_name'], 'value' => $this->num_or_str($p['val']), 'unit' => (string) $p['unit'],
                         'referenceRange' => $p['reference_range'] ?: null);
+                    if (!empty($p['loinc_code'])) {
+                        $o['loinc'] = $p['loinc_code'];
+                    }
+                    $obs[] = $o;
                 }
                 $conclusion = trim(strip_tags((string) ($r[$t . '_result'] ?: $r['description'])));
                 if (!$obs && $conclusion === '' && !$r[$t . '_report']) {
@@ -606,7 +971,8 @@ class Abdm_model extends CI_Model
             return $summary;
         }
 
-        $res = $client->post('/hip/sync', array('patients' => array_values($patients), 'careContexts' => $ccs));
+        // notifyUpdates: an edited record that is already linked is announced to the patient's PHR app (HIP_INTI_LINK_506).
+        $res = $client->post('/hip/sync', array('patients' => array_values($patients), 'careContexts' => $ccs, 'notifyUpdates' => true));
         foreach ($res['patients'] as $p) {
             if (!$p['ok']) {
                 $summary['errors'][] = 'Patient ' . $p['mrn'] . ': ' . $p['error'];
@@ -628,6 +994,33 @@ class Abdm_model extends CI_Model
             }
         }
         return $summary;
+    }
+
+    /**
+     * Link every shared but unlinked record of patients who have an ABHA, with no click (HIP_INTI_LINK_505).
+     * The bridge returns a job already in flight rather than starting another, so running this each cron is safe.
+     */
+    public function auto_link($client, $limit = 25)
+    {
+        $rows = $this->db->query("SELECT DISTINCT s.patient_id FROM abdm_sync s JOIN abdm_patients a ON a.patient_id = s.patient_id
+            WHERE s.linked = 0 AND s.error IS NULL AND a.abha_address IS NOT NULL ORDER BY s.patient_id LIMIT " . (int) $limit)->result_array();
+        $out = array('patients' => count($rows), 'started' => 0, 'running' => 0, 'done' => 0, 'errors' => array());
+        foreach ($rows as $r) {
+            $pid = (int) $r['patient_id'];
+            try {
+                $res = $client->post('/hip/patients/' . rawurlencode($this->mrn($pid)) . '/link', array());
+                $out[!empty($res['existing']) ? 'running' : 'started']++;
+            } catch (Exception $e) {
+                if ((int) $e->getCode() === 400 && stripos($e->getMessage(), 'no unlinked') !== false) {
+                    // Everything this patient shared is linked: stop asking until a new record arrives.
+                    $this->db->query('UPDATE abdm_sync SET linked = 1 WHERE patient_id = ?', array($pid));
+                    $out['done']++;
+                } else {
+                    $out['errors'][] = 'Patient ' . $pid . ': ' . $e->getMessage();
+                }
+            }
+        }
+        return $out;
     }
 
     /** Push just the patient demographics/ABHA (e.g. right after ABHA verification). */
@@ -678,15 +1071,39 @@ class Abdm_model extends CI_Model
         }
         $age = $dob ? (int) date_diff(date_create($dob), date_create('today'))->y : 0;
         $gender = array('M' => 'Male', 'F' => 'Female', 'O' => 'Other');
-        $this->db->insert('patients', array(
+        $g = strtoupper(substr(isset($profile['gender']) ? (string) $profile['gender'] : '', 0, 1));
+        $addr = isset($profile['address']) ? (is_array($profile['address']) ? $profile['address'] : array('line' => (string) $profile['address'])) : array();
+        $pick = function ($k) use ($profile, $addr) {
+            $v = isset($addr[$k]) ? $addr[$k] : (isset($profile[$k]) && !is_array($profile[$k]) ? $profile[$k] : '');
+            return trim((string) $v);
+        };
+        // The full address in 'address' (what existing screens show); its parts in the structured columns below.
+        $line = trim(implode(', ', array_filter(array($pick('line'), $pick('city'), $pick('district'), $pick('state'), $pick('pincode')))));
+        $row = array(
             'patient_name' => $profile['name'], 'dob' => $dob, 'age' => $age, 'month' => 0, 'day' => 0, 'as_of_date' => date('Y-m-d'),
-            'mobileno' => isset($profile['phoneNumber']) ? $profile['phoneNumber'] : '', 'gender' => isset($gender[$profile['gender']]) ? $gender[$profile['gender']] : 'Other',
-            'marital_status' => '', 'blood_group' => '', 'address' => isset($profile['address']['line']) ? $profile['address']['line'] : '',
+            'mobileno' => isset($profile['phoneNumber']) ? $profile['phoneNumber'] : '', 'gender' => isset($gender[$g]) ? $gender[$g] : 'Other',
+            'email' => isset($profile['email']) ? (string) $profile['email'] : '',
+            'marital_status' => '', 'blood_group' => '', 'address' => $line,
             'patient_type' => '', 'identification_number' => '', 'known_allergies' => '', 'note' => $note,
             'is_ipd' => '', 'app_key' => '', 'is_antenatal' => 0, 'is_active' => 'yes', 'generated_by' => $staff_id,
-        ));
-        $id = $this->db->insert_id();
-        $this->save_abha($id, isset($profile['abhaNumber']) ? $profile['abhaNumber'] : null, isset($profile['abhaAddress']) ? $profile['abhaAddress'] : null, $profile['name'], $staff_id);
+        );
+        // Structured address columns, where this install has them.
+        foreach (array('state' => 'state', 'district' => 'district', 'city_village' => 'city', 'pincode' => 'pincode', 'address_line' => 'line') as $col => $k) {
+            if ($this->db->field_exists($col, 'patients') && $pick($k) !== '') {
+                $row[$col] = $pick($k);
+            }
+        }
+        // Patient and ABHA tag together, or neither: a refused tag must not leave an untagged duplicate patient.
+        $this->db->trans_begin();
+        try {
+            $this->db->insert('patients', $row);
+            $id = $this->db->insert_id();
+            $this->save_abha($id, isset($profile['abhaNumber']) ? $profile['abhaNumber'] : null, isset($profile['abhaAddress']) ? $profile['abhaAddress'] : null, $profile['name'], $staff_id);
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            throw $e;
+        }
+        $this->db->trans_commit();
         return $id;
     }
 }

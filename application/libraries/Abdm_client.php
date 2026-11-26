@@ -111,6 +111,18 @@ class Abdm_client
                 $msg .= ' (' . implode('; ', $parts) . ')';
             }
         }
-        throw new Exception($msg, $status);
+        throw new Abdm_exception($msg, $status, is_array($data) && isset($data['code']) ? (string) $data['code'] : null);
+    }
+}
+
+/** A bridge error that keeps ABDM's own code (e.g. ABDM-1114), so screens can branch on it. */
+class Abdm_exception extends Exception
+{
+    public $abdm_code;
+
+    public function __construct($message, $status = 0, $abdm_code = null)
+    {
+        parent::__construct($message, $status);
+        $this->abdm_code = $abdm_code;
     }
 }

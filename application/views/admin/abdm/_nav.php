@@ -16,6 +16,9 @@
         <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'hip' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/hip_monitor'); ?>">Our records shared</a></li>
     <?php } ?>
     <?php if ($this->rbac->hasPrivilege('abdm_settings', 'can_view')) { ?>
+        <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'loinc' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/loinc'); ?>">Lab codes (LOINC)</a></li>
+    <?php } ?>
+    <?php if ($this->rbac->hasPrivilege('abdm_settings', 'can_view')) { ?>
         <li class="nav-item"><a class="nav-link <?php echo $abdm_tab === 'activity' ? 'active' : ''; ?>" href="<?php echo site_url('admin/abdm/activity'); ?>">Bridge activity</a></li>
     <?php } ?>
 </ul>

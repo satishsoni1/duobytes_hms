@@ -26,6 +26,7 @@ $has_abha = !empty($patient['abha_address']) || !empty($patient['abha_number']);
                         <span class="text-muted">No ABHA attached yet.</span>
                     <?php } ?>
                 </p>
+                <div id="abha-mob" class="d-none mb-2"></div>
                 <div id="abha-card-actions" class="d-none mb-2">
                     <button class="btn btn-outline-primary btn-sm" id="abha-card">Download ABHA card</button>
                     <button class="btn btn-outline-secondary btn-sm" id="abha-qr">Show QR</button>

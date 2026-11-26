@@ -71,8 +71,17 @@ class Abdm extends Admin_Controller
             $this->json($fn());
         } catch (Exception $e) {
             $code = (int) $e->getCode();
-            $this->json(array('error' => $e->getMessage()), $code >= 400 && $code < 600 ? $code : 502);
+            $out = array('error' => $e->getMessage());
+            if ($e instanceof Abdm_exception && $e->abdm_code) {
+                $out['code'] = $e->abdm_code;
+            }
+            $this->json($out, $code >= 400 && $code < 600 ? $code : 502);
         }
+    }
+
+    private function kind($b)
+    {
+        return isset($b['kind']) && $b['kind'] === 'phr' ? 'phr' : 'abha';
     }
 
     private function staff_id()
@@ -143,7 +152,13 @@ class Abdm extends Admin_Controller
             'enrol_otp' => '/m1/enrol/aadhaar/otp', 'enrol_verify' => '/m1/enrol/aadhaar/verify',
             'mobile_otp' => '/m1/enrol/mobile/otp', 'mobile_verify' => '/m1/enrol/mobile/verify',
             'address_create' => '/m1/enrol/address', 'login_otp' => '/m1/login/otp', 'login_verify' => '/m1/login/verify',
-            'login_select' => '/m1/login/select', 'profile' => '/m1/profile',
+            'login_select' => '/m1/login/select',
+            // ABHA address login: methods from ABDM (VRFY_ABHA_102/202)
+            'address_search' => '/m1/address/search', 'address_otp' => '/m1/address/otp', 'address_verify' => '/m1/address/verify',
+            // Find a forgotten ABHA by mobile: search, pick, OTP (VRFY_ABHA_301-308)
+            'find_search' => '/m1/find/search', 'find_otp' => '/m1/find/otp', 'find_verify' => '/m1/find/verify',
+            // Update the mobile on the ABHA when the hospital holds another (VRFY_ABHA_101/201 step 5)
+            'mobile_update_otp' => '/m1/profile/mobile/otp', 'mobile_update_verify' => '/m1/profile/mobile/verify',
         );
         $b = $this->body();
         if ($action === 'address_suggestions') {
@@ -151,9 +166,35 @@ class Abdm extends Admin_Controller
                 return $this->abdm_client->get('/m1/enrol/address/suggestions?txnId=' . rawurlencode(isset($b['txnId']) ? $b['txnId'] : ''));
             });
         }
+        if ($action === 'address_rules') {
+            $this->call(function () {
+                return $this->abdm_client->get('/m1/enrol/address/rules');
+            });
+        }
+        if ($action === 'enrol_otp') {
+            // Consent is recorded by the hospital before the Aadhaar OTP goes out (CRT_ABHA_102).
+            $this->call(function () use ($b) {
+                if (empty($b['consent'])) {
+                    throw new Exception('Beneficiary consent is required', 400);
+                }
+                $out = $this->abdm_client->post('/m1/enrol/aadhaar/otp', array('aadhaar' => isset($b['aadhaar']) ? (string) $b['aadhaar'] : '',
+                    'consent' => true, 'consentVersion' => Abdm_model::CONSENT_VERSION));
+                $this->abdm_model->record_consent('abha-enrollment', Abdm_model::CONSENT_VERSION, Abdm_model::CONSENT_EN,
+                    isset($out['txnId']) ? $out['txnId'] : null, $this->staff_id());
+                return $out;
+            });
+        }
+        if ($action === 'enrol_verify') {
+            $this->call(function () use ($b) {
+                $out = $this->abdm_client->post('/m1/enrol/aadhaar/verify', $b);
+                $this->abdm_model->consent_abha(isset($b['txnId']) ? $b['txnId'] : null,
+                    isset($out['ABHAProfile']['ABHANumber']) ? $out['ABHAProfile']['ABHANumber'] : null);
+                return $out;
+            });
+        }
         if ($action === 'card' || $action === 'qr') {
             try {
-                list($ctype, $bytes) = $this->abdm_client->post_binary('/m1/profile/' . $action, array('token' => isset($b['token']) ? $b['token'] : ''));
+                list($ctype, $bytes) = $this->abdm_client->post_binary('/m1/profile/' . $action, array('token' => isset($b['token']) ? $b['token'] : '', 'kind' => $this->kind($b)));
                 $this->output->set_header('Cache-Control: no-store')->set_content_type($ctype ?: 'image/png')->set_output($bytes)->_display();
                 exit;
             } catch (Exception $e) {
@@ -184,17 +225,15 @@ class Abdm extends Admin_Controller
             if (!$patient) {
                 throw new Exception('Patient not found', 404);
             }
-            $prof    = $this->abdm_client->post('/m1/profile', array('token' => isset($b['token']) ? $b['token'] : ''));
-            $number  = isset($prof['ABHANumber']) ? $prof['ABHANumber'] : null;
-            $address = isset($prof['preferredAbhaAddress']) ? $prof['preferredAbhaAddress'] : (isset($prof['phrAddress'][0]) ? $prof['phrAddress'][0] : null);
-            if (!$number && !$address) {
-                throw new Exception('Could not read the ABHA profile', 502);
-            }
+            $p       = $this->abha_profile(isset($b['token']) ? $b['token'] : '', $this->kind($b));
+            $prof    = $p['raw'];
+            $number  = $p['number'];
+            $address = $p['address'];
             $other = $this->abdm_model->find_patient_by_abha($address, $number);
             if ($other && (int) $other['patient_id'] !== (int) $patient_id) {
-                throw new Exception('This ABHA is already attached to patient #' . $other['patient_id'], 409);
+                throw new Exception('This ABHA profile is already linked to HMIS Beneficiary ID #' . $other['patient_id'], 409);
             }
-            $name = isset($prof['name']) ? $prof['name'] : trim((isset($prof['firstName']) ? $prof['firstName'] : '') . ' ' . (isset($prof['lastName']) ? $prof['lastName'] : ''));
+            $name = $p['name'];
             // ABDM: the HIP must make sure the ABHA belongs to this patient before linking records to it.
             $mismatch = $this->abdm_model->demographic_mismatches($patient, $prof);
             if ($mismatch && empty($b['confirmMismatch'])) {
@@ -205,7 +244,9 @@ class Abdm extends Admin_Controller
             }
             $this->abdm_model->save_abha($patient_id, $number, $address, $name, $this->staff_id());
             $this->abdm_model->sync_patient($this->abdm_client, $patient_id);
-            return array('abhaNumber' => $number, 'abhaAddress' => $address, 'name' => $name);
+            // The hospital's mobile, so the screen can offer to update the ABHA when they differ.
+            return array('abhaNumber' => $number, 'abhaAddress' => $address, 'name' => $name,
+                'hmsMobile' => (string) $patient['mobileno'], 'abhaMobile' => $p['mobile']);
         });
     }
 
@@ -284,23 +325,71 @@ class Abdm extends Admin_Controller
     {
         $this->guard('abdm_settings', 'can_edit');
         $this->call(function () {
-            return $this->abdm_model->sync($this->abdm_client);
+            $out = $this->abdm_model->sync($this->abdm_client);
+            $out['linking'] = $this->abdm_model->auto_link($this->abdm_client);
+            return $out;
+        });
+    }
+
+    // ------------------------------------------------------------------ M2: LOINC codes for lab results
+    /** Lab codes: a LOINC code per pathology parameter, so lab results are shared coded (Health_RECORD_CREATION_101). */
+    public function loinc()
+    {
+        if (!$this->rbac->hasPrivilege('abdm_settings', 'can_view')) {
+            access_denied();
+        }
+        $data['rows'] = $this->abdm_model->loinc_rows();
+        $data['can_edit'] = $this->rbac->hasPrivilege('abdm_settings', 'can_edit');
+        $this->page('loinc', $data, 'ABDM Lab codes (LOINC)');
+    }
+
+    public function loinc_save()
+    {
+        $this->guard('abdm_settings', 'can_edit');
+        $b = $this->body();
+        $this->call(function () use ($b) {
+            $items = isset($b['items']) && is_array($b['items']) ? array_slice($b['items'], 0, 500) : array();
+            $saved = 0;
+            foreach ($items as $it) {
+                $this->abdm_model->save_loinc(isset($it['id']) ? $it['id'] : 0, isset($it['code']) ? $it['code'] : '',
+                    isset($it['display']) ? $it['display'] : '', $this->staff_id());
+                $saved++;
+            }
+            return array('saved' => $saved);
         });
     }
 
     // ------------------------------------------------------------------ M3: HIU (proxy)
     public function hiu($action = '', $id = '')
     {
-        $read = in_array($action, array('meta', 'requests', 'artefacts', 'records'), true);
+        $read = in_array($action, array('meta', 'requests', 'artefacts', 'records', 'patient'), true);
         $this->guard('abdm_consent', $read ? 'can_view' : 'can_add', !$read);
         $this->call(function () use ($action, $id) {
             $safe = preg_replace('/[^A-Za-z0-9-]/', '', $id);
             switch ($action) {
                 case 'meta':      return $this->abdm_client->get('/hiu/meta');
-                case 'requests':  return $this->abdm_client->get('/hiu/consent-requests');
+                case 'patient':   return $this->hiu_patient((string) $this->input->get('abha', true));
+                case 'requests':
+                    // HIU_FLOW_102/104: show the patient's name and ABHA number beside the ABHA address the request names.
+                    $rows = $this->abdm_client->get('/hiu/consent-requests');
+                    $known = array();
+                    foreach ($rows as &$r) {
+                        $a = strtolower((string) $r['patient']);
+                        if (!array_key_exists($a, $known)) {
+                            $known[$a] = $this->hiu_patient($a);
+                        }
+                        $r['hms'] = $known[$a];
+                    }
+                    return $rows;
+                case 'create':
+                    // The patient must be known here by a verified ABHA address before records are requested.
+                    $b = $this->body();
+                    if (!$this->hiu_patient(isset($b['patient']) ? (string) $b['patient'] : '')) {
+                        throw new Exception('This ABHA address is not on any patient here. Verify the patient\'s ABHA first (ABDM / ABHA → Create / Verify ABHA), then request records.', 400);
+                    }
+                    return $this->abdm_client->post('/hiu/consent-requests', $b);
                 case 'artefacts': return $this->abdm_client->get('/hiu/artefacts');
                 case 'records':   return $this->abdm_client->get('/hiu/records' . ($safe ? '?consentId=' . $safe : ''));
-                case 'create':    return $this->abdm_client->post('/hiu/consent-requests', $this->body());
                 case 'status':    return $this->abdm_client->post('/hiu/consent-requests/' . $safe . '/status', array());
                 case 'fetch':     return $this->abdm_client->post('/hiu/artefacts/' . $safe . '/fetch', array());
                 case 'request':   return $this->abdm_client->post('/hiu/artefacts/' . $safe . '/request-data', array());
@@ -309,20 +398,32 @@ class Abdm extends Admin_Controller
         });
     }
 
+    /** The hospital patient tagged with this ABHA address: id, name, ABHA number. Null when none. */
+    private function hiu_patient($abha_address)
+    {
+        $a = strtolower(trim($abha_address));
+        if ($a === '') {
+            return null;
+        }
+        $hit = $this->abdm_model->find_patient_by_abha($a, null);
+        if (!$hit) {
+            return null;
+        }
+        $p = $this->abdm_model->patient_summary($hit['patient_id']);
+        return $p ? array('id' => $p['id'], 'name' => $p['name'], 'abhaNumber' => $p['abhaNumber'], 'gender' => $p['gender'], 'dob' => $p['dob']) : null;
+    }
+
     // ------------------------------------------------------------------ Scan & Share
     public function share_queue()
     {
         $this->guard('abdm_abha', 'can_view', false);
         $this->call(function () {
-            $rows = $this->abdm_client->get('/m1/share/queue');
-            foreach ($rows as &$r) {
-                $m = $this->abdm_model->find_patient_by_abha($r['abha_address'], isset($r['abhaNumber']) ? $r['abhaNumber'] : null);
-                $r['hms_patient_id'] = $m ? (int) $m['patient_id'] : null;
-            }
-            return $rows;
+            // Shared profiles are registered with no manual step (SHARE_PATIENT_PROFILE_701); the cron does the same.
+            return $this->abdm_model->process_share_queue($this->abdm_client, $this->staff_id());
         });
     }
 
+    /** Manual retry for a token whose automatic registration failed. */
     public function share_register()
     {
         $this->guard('abdm_abha', 'can_add');
@@ -331,14 +432,9 @@ class Abdm extends Admin_Controller
             $rows = $this->abdm_client->get('/m1/share/queue');
             foreach ($rows as $r) {
                 if ((string) $r['id'] === (string) (isset($b['id']) ? $b['id'] : '')) {
-                    $m = $this->abdm_model->find_patient_by_abha($r['abha_address'], isset($r['abhaNumber']) ? $r['abhaNumber'] : null);
-                    if ($m) {
-                        return array('patientId' => (int) $m['patient_id'], 'existing' => true);
-                    }
-                    $profile = array_merge(array('abhaAddress' => $r['abha_address']), isset($r['profile']) ? $r['profile'] : array());
-                    $pid = $this->abdm_model->create_patient_from_abha($profile, $this->staff_id());
+                    list($pid, $how) = $this->abdm_model->register_shared($r, $this->staff_id());
                     $this->abdm_model->sync_patient($this->abdm_client, $pid);
-                    return array('patientId' => $pid, 'existing' => false);
+                    return array('patientId' => $pid, 'existing' => $how !== 'new', 'how' => $how);
                 }
             }
             throw new Exception('Token not found in today\'s queue', 404);
@@ -355,10 +451,13 @@ class Abdm extends Admin_Controller
         $this->page('abha', array(), 'Create / Verify ABHA');
     }
 
-    /** Profile read from ABDM with the user token (never trust a profile sent by the browser). */
-    private function abha_profile($token)
+    /**
+     * Profile read from ABDM with the user token (never trust a profile sent by the browser).
+     * $kind: 'abha' for an enrolment / ABHA number / mobile / Aadhaar token, 'phr' for an ABHA address login.
+     */
+    private function abha_profile($token, $kind = 'abha')
     {
-        $prof = $this->abdm_client->post('/m1/profile', array('token' => (string) $token));
+        $prof = $this->abdm_client->post('/m1/profile', array('token' => (string) $token, 'kind' => $kind));
         $number  = isset($prof['ABHANumber']) ? $prof['ABHANumber'] : null;
         $address = isset($prof['preferredAbhaAddress']) ? $prof['preferredAbhaAddress'] : (isset($prof['phrAddress'][0]) ? $prof['phrAddress'][0] : null);
         if (!$number && !$address) {
@@ -373,35 +472,62 @@ class Abdm extends Admin_Controller
         if (!$y && preg_match('/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/', (string) $dob_raw, $mm)) {
             list(, $d, $m, $y) = array_map('intval', $mm);
         }
-        $line = trim(implode(', ', array_filter(array(@$prof['address'], @$prof['districtName'], @$prof['stateName'], @$prof['pinCode']))));
+        $str = function ($k) use ($prof) {
+            return isset($prof[$k]) && !is_array($prof[$k]) ? trim((string) $prof[$k]) : '';
+        };
+        $line = trim(implode(', ', array_filter(array($str('address'), $str('townName'), $str('districtName'), $str('stateName'), $str('pinCode')))));
         return array(
-            'raw'     => $prof,
-            'number'  => $number,
-            'address' => $address,
-            'name'    => $name,
-            'gender'  => isset($prof['gender']) ? strtoupper(substr($prof['gender'], 0, 1)) : '',
-            'dob'     => $y ? ($d && $m ? sprintf('%02d-%02d-%04d', $d, $m, $y) : (string) $y) : '',
-            'mobile'  => isset($prof['mobile']) ? $prof['mobile'] : '',
-            'photo'   => isset($prof['profilePhoto']) ? $prof['profilePhoto'] : (isset($prof['photo']) ? $prof['photo'] : ''),
-            'line'    => $line,
+            'raw'      => $prof,
+            'kind'     => $kind,
+            'number'   => $number,
+            'address'  => $address,
+            'addresses' => isset($prof['phrAddress']) && is_array($prof['phrAddress']) ? array_values($prof['phrAddress']) : ($address ? array($address) : array()),
+            'name'     => $name,
+            'gender'   => isset($prof['gender']) ? strtoupper(substr($prof['gender'], 0, 1)) : '',
+            'dob'      => $y ? ($d && $m ? sprintf('%02d-%02d-%04d', $d, $m, $y) : (string) $y) : '',
+            'mobile'   => $str('mobile'),
+            'email'    => $str('email'),
+            'photo'    => isset($prof['profilePhoto']) ? $prof['profilePhoto'] : (isset($prof['photo']) ? $prof['photo'] : ''),
+            'line'     => $line,
+            'street'   => $str('address'),
+            'city'     => $str('townName') !== '' ? $str('townName') : $str('villageName'),
+            'district' => $str('districtName'),
+            'state'    => $str('stateName'),
+            'pincode'  => $str('pinCode'),
+            'kycVerified' => isset($prof['kycVerified']) ? filter_var($prof['kycVerified'], FILTER_VALIDATE_BOOLEAN) : null,
             'y' => $y, 'm' => $m, 'd' => $d,
         );
     }
 
+    private function match_input($p)
+    {
+        return array('name' => $p['name'], 'gender' => $p['gender'], 'yearOfBirth' => $p['y'] ?: null, 'mobile' => $p['mobile']);
+    }
+
+    /**
+     * After a verify or create: the profile, the patient already tagged with this ABHA with both sides for the comparison
+     * screen (VRFY_ABHA_308), and otherwise the patients who may be this person (CRT_ABHA_116).
+     */
     public function abha_lookup()
     {
         $this->guard('abdm_abha', 'can_add');
         $b = $this->body();
         $this->call(function () use ($b) {
-            $p = $this->abha_profile(isset($b['token']) ? $b['token'] : '');
+            $p = $this->abha_profile(isset($b['token']) ? $b['token'] : '', $this->kind($b));
             $hit = $this->abdm_model->find_patient_by_abha($p['address'], $p['number']);
-            unset($p['raw'], $p['y'], $p['m'], $p['d']);
             $p['hms_patient_id'] = $hit ? (int) $hit['patient_id'] : null;
+            $p['hms'] = $hit ? $this->abdm_model->patient_summary($hit['patient_id']) : null;
+            $p['candidates'] = $hit ? array() : $this->abdm_model->match_candidates($this->match_input($p));
+            unset($p['raw'], $p['y'], $p['m'], $p['d']);
             return $p;
         });
     }
 
-    /** Register a new HMS patient from the verified ABHA. */
+    /**
+     * Register a new HMS patient from the verified ABHA, after staff confirm the filled form (VRFY_ABHA_306).
+     * Name, date of birth and gender always come from ABDM; mobile, email and address are taken from the form.
+     * A patient who matches on every demographic field is reused unless staff confirm this is someone else.
+     */
     public function abha_register()
     {
         $this->guard('abdm_abha', 'can_add');
@@ -410,15 +536,38 @@ class Abdm extends Admin_Controller
         }
         $b = $this->body();
         $this->call(function () use ($b) {
-            $p = $this->abha_profile(isset($b['token']) ? $b['token'] : '');
+            $p = $this->abha_profile(isset($b['token']) ? $b['token'] : '', $this->kind($b));
             $hit = $this->abdm_model->find_patient_by_abha($p['address'], $p['number']);
             if ($hit) {
                 return array('patientId' => (int) $hit['patient_id'], 'existing' => true);
             }
+            $f = isset($b['form']) && is_array($b['form']) ? $b['form'] : array();
+            $val = function ($k, $max, $fallback = '') use ($f) {
+                $v = isset($f[$k]) && is_scalar($f[$k]) ? trim((string) $f[$k]) : $fallback;
+                return mb_substr($v, 0, $max);
+            };
+            $mobile = preg_replace('/\D/', '', $val('mobile', 15, $p['mobile']));
+            if ($mobile !== '' && !preg_match('/^[6-9]\d{9}$/', substr($mobile, -10))) {
+                throw new Exception('Please enter a valid mobile number.', 400);
+            }
+            $email = $val('email', 100, $p['email']);
+            if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception('Please enter a valid email address.', 400);
+            }
+            if (empty($b['forceNew'])) {
+                foreach ($this->abdm_model->match_candidates(array_merge($this->match_input($p), array('mobile' => $mobile)), 3) as $c) {
+                    if ($c['full'] && !$c['abha_number']) {
+                        return array('match' => $c);
+                    }
+                }
+            }
             $pid = $this->abdm_model->create_patient_from_abha(array(
-                'name' => $p['name'], 'gender' => $p['gender'], 'phoneNumber' => $p['mobile'],
+                'name' => $p['name'], 'gender' => $p['gender'], 'phoneNumber' => $mobile === '' ? '' : substr($mobile, -10), 'email' => $email,
                 'yearOfBirth' => $p['y'] ?: null, 'monthOfBirth' => $p['m'] ?: null, 'dayOfBirth' => $p['d'] ?: null,
-                'address' => array('line' => $p['line']), 'abhaNumber' => $p['number'], 'abhaAddress' => $p['address'],
+                'address' => array('line' => $val('street', 250, $p['street']), 'city' => $val('city', 120, $p['city']),
+                    'district' => $val('district', 80, $p['district']), 'state' => $val('state', 60, $p['state']),
+                    'pincode' => preg_replace('/\D/', '', $val('pincode', 10, $p['pincode']))),
+                'abhaNumber' => $p['number'], 'abhaAddress' => $p['address'],
             ), $this->staff_id(), 'Registered via ABHA (verified by OTP)');
             $this->abdm_model->sync_patient($this->abdm_client, $pid);
             return array('patientId' => $pid, 'existing' => false);

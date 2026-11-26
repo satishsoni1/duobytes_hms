@@ -6,9 +6,9 @@
         <button class="btn btn-outline-secondary btn-sm" id="sq-refresh"><i class="fa fa-refresh"></i> Refresh</button>
     </div>
     <div class="card-body table-responsive">
-        <p class="text-muted small">Patients who scan the hospital's ABDM QR code in their ABHA app appear here with a token number. Register new patients in one click; their ABHA is attached automatically.</p>
+        <p class="text-muted small">Patients who scan the hospital's ABDM QR code in their ABHA app appear here with a token number (valid 60 minutes). They are registered automatically from the shared profile: a returning patient is matched to their existing record, and a new ABHA address on the same ABHA number updates that record instead of creating another.</p>
         <table class="table table-striped table-hover">
-            <thead><tr><th>Token</th><th>Name</th><th>ABHA address</th><th>Gender / YOB</th><th>Counter</th><th>Time</th><th></th></tr></thead>
+            <thead><tr><th>Token</th><th>Name</th><th>ABHA address</th><th>Gender / YOB</th><th>Counter</th><th>Time</th><th>Patient</th></tr></thead>
             <tbody id="sq-list"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
         </table>
     </div>

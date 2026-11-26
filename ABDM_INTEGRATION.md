@@ -11,10 +11,11 @@ Staff ─▶ Smart Hospital (PHP, Hostinger) ──HTTPS + API key──▶ ABDM
 | Where | Feature |
 |---|---|
 | Patient profile (OPD and IPD) → **ABHA / ABDM** button | Verify an existing ABHA (ABHA number, mobile or Aadhaar OTP) or create a new one via Aadhaar OTP; download the ABHA card and QR; see which records are shared and linked; **Link to ABHA** |
-| Sidebar → **ABDM / ABHA** → Create / Verify ABHA | M1 without choosing a patient first: verify an ABHA (QR, ABHA number, mobile or Aadhaar OTP) or create one via Aadhaar OTP; view the profile, ABHA card and QR; then **Register as new patient** (needs Patient add permission) or **Attach** to an existing patient found by ID, name or mobile |
-| Sidebar → **ABDM / ABHA** → Scan & Share queue | Patients who scan the hospital QR in their ABHA app appear with a token number; register new patients in one click |
-| Sidebar → **ABDM / ABHA** → Records from other hospitals | Send a consent request; once the patient approves in their ABHA app, fetch and read records from other hospitals (deleted automatically when consent ends) |
-| Sidebar → **ABDM / ABHA** → ABDM status | Bridge connection, sync counts, sync errors, **Sync now** |
+| Sidebar → **ABDM / ABHA** → Create / Verify ABHA | M1 without choosing a patient first. Verify an ABHA by ABHA number (Aadhaar or mobile OTP), ABHA address (methods offered by ABDM), mobile only (find a forgotten ABHA: list, pick, then OTP) or Aadhaar OTP; or create one via Aadhaar OTP. Every OTP has Resend (after 60 s, twice). Then: an ABHA already on a patient shows an ABHA vs hospital comparison; a likely returning patient (mobile, name, gender and age all match) is linked instead of registered again; otherwise a registration form filled from ABHA (name, DOB and gender locked) registers the patient. When the hospital's mobile differs from the ABHA's, staff can update the ABHA mobile by OTP |
+| Sidebar → **ABDM / ABHA** → Scan & Share queue | Patients who scan the hospital QR in their ABHA app appear with a token number (valid 60 minutes) and are registered automatically, by the page and by the cron. A known ABHA number with a new ABHA address updates that patient; a full demographic match is reused |
+| Sidebar → **ABDM / ABHA** → Records from other hospitals | Send a consent request (the patient must already have a verified ABHA here). Each request shows the patient's name, ABHA address and number, HI types, period, consent expiry, and the time of every status (requested, granted, denied, revoked, expired); what each hospital granted is shown beside it, marked where the patient edited it. The list refreshes every 30 seconds. Received records are filtered by HI type and shown readably (results, medicines, diagnoses, immunizations, invoices, documents); they are deleted automatically when consent ends |
+| Sidebar → **ABDM / ABHA** → ABDM status | Bridge connection, sync counts, sync errors, **Sync now** (which also links new records to patients' ABHAs) |
+| Sidebar → **ABDM / ABHA** → Lab codes (LOINC) | A LOINC code per pathology parameter, so lab results are shared coded. Suggestions for about 30 common tests are shown but used only once staff confirm them; every code is checked for its LOINC check digit. Saving a code re-sends the lab reports that use the test |
 | Sidebar → **ABDM / ABHA** → Our records shared | Consents ABDM sent us for this hospital's records (patient, requester, purpose, valid till) and each data transfer, with errors |
 | Sidebar → **ABDM / ABHA** → Bridge activity | Bridge background jobs (failed jobs with **Retry**) and the ABDM audit log for this hospital |
 
@@ -28,7 +29,9 @@ Records shared automatically (from the configured start date):
 | Approved radiology report | DiagnosticReport | `RAD-<report id>` |
 | Discharge card (diagnosis, ICD-10, investigations, treatment, notes) | DischargeSummary | `DS-<discharge id>` |
 
-Patients can also find and link these records from their ABHA app themselves; the bridge sends them an OTP by SMS.
+Records are **linked to the patient's ABHA automatically**: each cron run (and **Sync now**) links every shared record of a patient with an ABHA, one link job per patient at a time; the link token is reused for 6 months. When a linked record is edited, the patient's ABHA app is told that new data is available. Lab results carry the LOINC codes set under **Lab codes**.
+
+Patients can also find and link these records from their ABHA app themselves; the bridge matches them by ABHA, then by mobile with a fuzzy name match (word order, initials, spelling variants and one typo are tolerated), gender and year of birth, and sends them an OTP by SMS.
 
 ## Files
 
@@ -39,7 +42,7 @@ application/controllers/admin/Abdm.php
 application/controllers/Abdmcron.php
 application/libraries/Abdm_client.php
 application/models/Abdm_model.php
-application/views/admin/abdm/        (_nav, _m1_forms, abha, index, patient, consent, share, hip, activity)
+application/views/admin/abdm/        (_nav, _m1_forms, abha, index, patient, consent, share, hip, activity, loinc)
 backend/abdm/abdm.js
 ```
 Changed (small additions only):
@@ -49,7 +52,13 @@ application/views/admin/patient/profile.php     ABHA / ABDM button
 application/views/admin/patient/ipdprofile.php  ABHA / ABDM button
 index.php                                       ENVIRONMENT can be set via CI_ENV (default stays 'production')
 ```
-Database: tables `abdm_patients` and `abdm_sync`, plus the **ABDM** permission group, are created automatically the first time an admin opens an ABDM page. Nothing in existing tables is changed.
+Database: tables `abdm_patients`, `abdm_sync`, `abdm_consents` and `abdm_loinc` (the LOINC code per pathology parameter) (who took the ABHA-creation consent, when, and which text version; no Aadhaar is stored), plus the **ABDM** permission group, are created automatically the first time an admin opens an ABDM page. A unique index on `abdm_patients.abha_number` (one ABHA per patient) is added at the same time, **only if no ABHA number is already on two patients**; otherwise the duplicates are written to the log and the index is skipped. Check before go-live with:
+
+```sql
+SELECT abha_number, GROUP_CONCAT(patient_id) FROM abdm_patients WHERE abha_number IS NOT NULL GROUP BY abha_number HAVING COUNT(*) > 1;
+```
+
+Nothing in existing Smart Hospital tables is changed; patients registered from ABHA also fill `email`, `state`, `district`, `city_village`, `pincode` and `address_line` where those columns exist.
 
 ## Go-live steps
 
@@ -78,6 +87,9 @@ Database: tables `abdm_patients` and `abdm_sync`, plus the **ABDM** permission g
 
 ## Notes
 
+- **The bridge must be updated with this release.** The new screens call bridge routes added at the same time (`/m1/address/*`, `/m1/find/*`, `/m1/profile/mobile/*`, `/m1/enrol/address/rules`), and the consent screen reads the status history added by bridge migration `005_consent_history.sql` (applied automatically when the bridge starts). Deploy the bridge first.
+- **Bridge hosting:** the bridge runs as a Node.js app (Hostinger web app from GitHub) with its database on **Neon Postgres** (`DATABASE_URL` pooled, `DATABASE_URL_UNPOOLED` for migrations; build command: none, start command: `npm start`). Its worker does not poll an idle database, so Neon can scale to zero; housekeeping (erasing expired records, link timeouts) runs when Smart Hospital's cron calls the bridge, with a 30-minute fallback. Each cron run wakes Neon for about five minutes, so a 10-minute cron keeps it awake about half the time; 15 minutes is a good balance on Neon's free plan.
+- **M1 test cases:** the plan and the status of every NHA case are in `INTEGRATION-PLAN.md`; the ABDM skill is in `.claude/skills/abdm-m1/`.
 - **ABHA is attached only after OTP verification.** Smart Hospital re-reads the profile from ABDM with the patient's token, so staff can't type in someone else's ABHA.
 - **Changes after sharing:** an edited report or prescription is re-sent on the next sync, and the patient's ABHA app is told that new data is available.
 - **Never change `abdm_mrn_prefix` after go-live.** Patients' linked records are keyed by it.
